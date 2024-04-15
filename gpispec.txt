@@ -1,0 +1,277 @@
+General Planar Image format specification (conventional extension .gpi)
+
+Header:
+0x00    "GPI" (0x47 0x50 0x49)  magic number
+0x03    uint8                   flags
+        0000 BEFC
+        C - compression method (0 - LZ77, 1 - reserved)
+        F - use filtering?
+        E - endianness of bits in bytes (0 - 01234567, 1 - 76543210, where increasing numbers correspond to moving pixels to the right)
+        B - palette entry bits per channel (0 - 4 bits per channel, 1 - 8 bits per channel)
+0x04    uint16                  width - 1
+0x06    uint16                  height - 1
+0x08    uint16                  numTiles - 1
+        Logically, the entire image would be stored as a planar bitmap of height = height * numTiles
+        This number is to facilitate making tilemaps or spritesheets, though the dimensions of such a tilemap are not stored, therefore this is not a good intermediate format for editing the tilemaps
+0x0A    uint16                  planes
+        XXXX XXXM  7654 3210
+        number - has data for given plane?
+        M - has data for mask?
+        X - reserved, leave as zero
+0x0C    uint4/8[3][2^colour planes stored]  palette
+        If B = 0, each entry is bitpacked assuming little-endian order, such that entries would be packed like so:
+        GGGG RRRR  RRRR BBBB  BBBB GGGG  ...
+        If B = 1, no bitpacking is needed and 3 bytes are stored for each palette entry, going in the sequence RGBRGBRGB...
+
+What follows the header is the data for each plane. They will always be in the order M01234567 where M is the mask plane. Any missing planes are simply skipped over.
+
+Encode process:
+raw image data -> converted to planar -> filtered -> compressed -> stored
+Decode process:
+GPI data -> decompressed -> filter reversed -> raw planar data
+Note: the filter and compress stage might be interleaved for every line in order to pick the ideal filter for each line, i.e:
+get line -> filter -> compress -> have we tried all the filters --> commit smallest one -> repeat until compression is done
+              ^                               | no              yes
+              |--------------------------------
+
+Note: if filtering is disabled, the corresponding steps are not done, simplifying compression and decompression at the cost of a larger file in most cases
+
+For each plane:
+Compression header:
+LZ77 compression:
+0x0000  uint8  lzescape1
+0x0001  uint8  lzescape2
+The two least used bytes should be chosen to be escape bytes
+If the escape bytes are the same, then the plane wasn't LZ compressed nor filtered (filtering is only necessary if the plane is being compressed, otherwise it's a useless exercise). Conventionally, if they are the same, they should both be 0x00.
+0x0002  uint32 compressedSize
+
+If filtering is enabled:
+0x0000  uint4[height*numTiles] filter specification for each line
+        bit 3 = 0 -> D[x,y] = filt
+        bit 3 = 1 -> D[x,y] = NOT filt
+        bits 0-2:
+            0 - filt = S[x,y]
+            1 - filt = S[x,y] XOR S[x-1,y]
+            2 - filt = S[x,y] XOR S[x,y-1]
+            3 - filt = S[x,y] XOR S[x,y-height] (one tile before)
+            4 - filt = S[x,y] XOR S[x,y] one plane before
+            5 - filt = S[x,y] XOR S[x,y] two planes before
+            6 - filt = S[x,y] XOR S[x,y] three planes before
+            7 - filt = S[x,y] XOR S[x,y] four planes before
+The point of filtering is to make the data more compressible by whatever method
+If filtering is not enabled, this is skipped and we go to the main data section, which is now assumed not to be filtered.
+
+Main data section:
+Each byte encodes one bit of the corresponding palette index for 8 pixels in a row: a standard planar format.
+e.g.
+bits
+Plane 3: 0000000011111111
+Plane 2: 0000111100001111
+Plane 1: 0011001100110011
+Plane 0: 0101010101010101
+Mask:    0111101011110110 (Note: conventionally bits that are zero in the mask should be zero in the other planes, this is just a contrived example)
+palette indices
+Before:  0000000099999999 (for example)
+After:   0123406089AB9DE9
+
+LZ77 compression:
+If one of the escape bytes is encountered, then the following byte(s) determine(s) how to decompress according to the logic of LZ77
+lzescape1  LLLD DDDD:
+    LLL -> length of sequence - 3 (-1 if DDDDD = 0)
+    DDDDD -> distance to go back and start copying from (relative to the escape byte)
+lzescape2  DDDD DDDD  LLLL LLDD:
+    LLLLLL -> length of sequence - 4 (-1 if DDDDDDDDDD = 0)
+    DDDDDDDDDD -> distance to go back and start copying from (relative to the escape byte)
+Note that an encoder should only use these sequences if they will save space, which is why the length fields are biased to reduce the number of redundant possibilities.
+
+Schematic defiltering routine (one plane):
+
+uint16_t width;
+unsigned int bytewidth = (width + 0x7) >> 3;
+uint16_t height;
+uint16_t numTiles;
+uint32_t planeLen = bytewidth * height * numTiles;
+int planeNum;
+uint8_t carry;
+uint8_t* filtSpec;
+uint8_t* filtData;
+uint8_t* outData;
+for (int i = 0; i < height*numTiles; i++)
+{
+    int curFiltSpec = filtSpec[i >> 1];
+    curFiltSpec = (i & 1 ? curFiltSpec >> 4 : curFiltSpec) & 0xF;
+    int curRow = (planeLen * planeNum + i) * bytewidth;
+    switch (curFiltSpec)
+    {
+        case 0x0:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow];
+            }
+            break;
+        case 0x1:
+            carry = 0x00;
+            for (int j = 0; j < bytewidth; j++)
+            {
+                uint8_t in = filtData[j + curRow];
+                in ^= in >> 1 | carry;
+                in ^= in >> 2;
+                in ^= in >> 4;
+                carry = (in & 0x01) << 7;
+                outData[j + curRow] = in;
+            }
+            break;
+        case 0x2:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - bytewidth];
+            }
+            break;
+        case 0x3:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - bytewidth * height];
+            }
+            break;
+        case 0x4:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - planeLen];
+            }
+            break;
+        case 0x5:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - planeLen * 2];
+            }
+            break;
+        case 0x6:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - planeLen * 3];
+            }
+            break;
+        case 0x7:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = filtData[j + curRow] ^ outData[j + curRow - planeLen * 4];
+            }
+            break;
+        case 0x8:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = ~filtData[j + curRow];
+            }
+            break;
+        case 0x9:
+            carry = 0x00;
+            for (int j = 0; j < bytewidth; j++)
+            {
+                uint8_t in = ~filtData[j + curRow];
+                in ^= in >> 1 | carry;
+                in ^= in >> 2;
+                in ^= in >> 4;
+                carry = (in & 0x01) << 7;
+                outData[j + curRow] = in;
+            }
+            break;
+        case 0xA:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - bytewidth];
+            }
+            break;
+        case 0xB:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - bytewidth * height];
+            }
+            break;
+        case 0xC:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - planeLen];
+            }
+            break;
+        case 0xD:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - planeLen * 2];
+            }
+            break;
+        case 0xE:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - planeLen * 3];
+            }
+            break;
+        case 0xF:
+            for (int j = 0; j < bytewidth; j++)
+            {
+                outData[j + curRow] = (~filtData[j + curRow]) ^ outData[j + curRow - planeLen * 4];
+            }
+            break;
+    }
+}
+
+Schematic LZ decompression routine (one plane):
+
+uint32_t compressedSize;
+uint8_t lzescape1;
+uint8_t lzescape2;
+uint8_t* compressedData;
+uint8_t* filtData;
+for (int i = 0; i < compressedSize; i++)
+{
+    uint8_t in = compressedData[i];
+    if (in == lzescape1)
+    {
+        i++;
+        uint8_t specbyte = compressedData[i];
+        int length = (specbyte & 0xE0) >> 5;
+        int dist = specbyte & 0x1F;
+        if (dist == 0)
+        {
+            length++;
+            for (int j = 0; j < length; j++)
+            {
+                *filtData++ = lzescape1;
+            }
+        }
+        else
+        {
+            length += 3;
+            uint8_t* copybackPtr = filtData - dist;
+            for (int j = 0; j < length; j++)
+            {
+                *filtData++ = *copybackPtr++;
+            }
+        }
+    }
+    else if (in == lzescape2)
+    {
+        i++;
+        uint16_t specword = *((uint16_t*)(&compressedData[i]));
+        i++;
+        int length = (specword & 0xFC00) >> 10;
+        int dist = specword & 0x03FF;
+        if (dist == 0)
+        {
+            length++;
+            for (int j = 0; j < length; j++)
+            {
+                *filtData++ = lzescape2;
+            }
+        }
+        else
+        {
+            length += 4;
+            uint8_t* copybackPtr = filtData - dist;
+            for (int j = 0; j < length; j++)
+            {
+                *filtData++ = *copybackPtr++;
+            }
+        }
+    }
+    else *filtData++ = in;
+}
