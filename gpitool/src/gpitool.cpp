@@ -23,6 +23,7 @@
  */
 
 #include <gtkmm/filechooserdialog.h>
+#include <omp.h>
 #include "gpitool.h"
 
 static const char* licenseString =
@@ -79,6 +80,7 @@ static const char* uiXML =
 GPITool::GPITool() : Gtk::Application()
 {
     Glib::set_application_name("GPITool");
+    ihand = new ImageHandler();
 }
 
 Glib::RefPtr<GPITool> GPITool::create()
@@ -146,6 +148,16 @@ void GPITool::OnMenuFileOpen()
     switch(result)
     {
         case(Gtk::RESPONSE_OK):
+            ihand->OpenImageFile((char*)dialog.get_filename().c_str());
+            if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
+            {
+                ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, true);
+            }
+            else
+            {
+                ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+            }
+            mwin->SetNewImageThumbnail(ihand);
             break;
         case(Gtk::RESPONSE_CANCEL):
             break;
@@ -205,6 +217,7 @@ void GPITool::OnAboutDialogResponse(int responseID)
 
 int main (int argc, char* argv[])
 {
+    omp_set_num_threads(omp_get_max_threads());
     Glib::RefPtr<GPITool> gpitool = GPITool::create();
     return gpitool->run(argc, argv);
 }

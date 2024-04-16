@@ -23,6 +23,7 @@
  */
 
 #include <gtkmm/box.h>
+#include <string.h>
 #include "mainwindow.h"
 
 static const char* uiXML =
@@ -69,8 +70,8 @@ MainWindow::MainWindow()
 
     builderRef->get_widget<Gtk::Image>("mainImage", mainImage);
 
-    mainPixbuf = Gdk::Pixbuf::create(Gdk::Colorspace::COLORSPACE_RGB, true, 8, 640, 400);
-    mainPixbuf->fill(0x00FF88FF);
+    mainPixbuf = Gdk::Pixbuf::create(Gdk::Colorspace::COLORSPACE_RGB, true, 8, 8, 8);
+    mainPixbuf->fill(0x00000000);
     mainImage->set(mainPixbuf);
 }
 
@@ -78,3 +79,20 @@ MainWindow::~MainWindow()
 {
 
 }
+
+void MainWindow::SetNewImageThumbnail(ImageHandler* ihand)
+{
+    ImageInfo* iinf = ihand->GetEncodedImage();
+    mainPixbuf = Gdk::Pixbuf::create(Gdk::Colorspace::COLORSPACE_RGB, true, 8, iinf->width, iinf->height);
+    memcpy(mainPixbuf->get_pixels(), iinf->data, iinf->width * iinf->height * 4);
+    mainImage->set(mainPixbuf);
+}
+
+void MainWindow::UpdateImageThumbnail(ImageHandler* ihand)
+{
+    ImageInfo* iinf = ihand->GetEncodedImage();
+    memcpy(mainPixbuf->get_pixels(), iinf->data, iinf->width * iinf->height * 4);
+    mainImage->set(mainPixbuf);
+}
+
+

@@ -19,9 +19,9 @@ export FULLOFILES   := $(addprefix $(BUILD)/,$(OFILES))
 # Flags and libraries
 export CC               := gcc
 export CXX              := g++
-export CFLAGSBASE       := `pkg-config gtkmm-3.0 --cflags`
+export CFLAGSBASE       := -fopenmp `pkg-config gtkmm-3.0 --cflags`
 export CFLAGSDEBUG      := $(CFLAGSBASE) -Og
-export CFLAGSRELEASE    := $(CFLAGSBASE) -O3 -flto
+export CFLAGSRELEASE    := $(CFLAGSBASE) -O3 -flto -fno-trapping-math -fno-math-errno -ffp-contract=fast -ffinite-math-only -fno-signed-zeros -freciprocal-math
 export CFLAGS           := $(CFLAGSBASE)
 export CXXFLAGS         := -DGLIBMM_DISABLE_DEPRECATED -DGIOMM_DISABLE_DEPRECATED -DGTKMM_DISABLE_DEPRECATED -DGDKMM_DISABLE_DEPRECATED
 export LINKFLAGSBASE    :=

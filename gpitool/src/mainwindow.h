@@ -30,12 +30,16 @@
 #include <gtkmm/builder.h>
 #include <gtkmm/image.h>
 #include <gdkmm/pixbuf.h>
+#include "imagehandler.h"
 
 class MainWindow : public Gtk::ApplicationWindow
 {
 public:
     MainWindow();
     virtual ~MainWindow();
+
+    void SetNewImageThumbnail(ImageHandler* ihand);
+    void UpdateImageThumbnail(ImageHandler* ihand);
 
 protected:
     Glib::RefPtr<Gtk::Builder> builderRef;

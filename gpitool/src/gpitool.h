@@ -29,6 +29,7 @@
 #include <gtkmm/builder.h>
 #include <gtkmm/aboutdialog.h>
 #include "mainwindow.h"
+#include "imagehandler.h"
 
 class GPITool : public Gtk::Application
 {
@@ -52,6 +53,7 @@ private:
     void OnAboutDialogResponse(int responseID);
 
     Glib::RefPtr<Gtk::Builder> builderRef;
-    MainWindow* mwin;
     Gtk::AboutDialog aboutDialog;
+    MainWindow* mwin;
+    ImageHandler* ihand;
 };
