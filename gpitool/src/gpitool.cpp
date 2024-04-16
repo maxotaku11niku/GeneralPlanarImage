@@ -149,9 +149,9 @@ void GPITool::OnMenuFileOpen()
     {
         case(Gtk::RESPONSE_OK):
             ihand->OpenImageFile((char*)dialog.get_filename().c_str());
-            if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
+            if (!ihand->GetBestPalette(0.1, 0.0, 0.2))
             {
-                ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, true);
+                ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.8, 0.02, 0.03, 0.7, 0.0, 0.0, 0.0, 0.2, true);
             }
             else
             {

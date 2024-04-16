@@ -346,46 +346,177 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
 
     //Do the k-means algorithm if there are more unique colours in the image than the number of colours in the palette
     ColourOkLabA* colours = (ColourOkLabA*)malloc(numPixels * sizeof(ColourOkLabA));
-    KMean* means = (KMean*)malloc(numColours * sizeof(KMean));
+    KMean means[256];
     //Initialise means
     for (int i = 0; i < numColours; i++)
     {
-        KMean m;
-        m.numInCluster = 0;
-        m.sumL = 0.0; m.suma = 0.0; m.sumb = 0.0;
-        means[i] = m;
+        KMean* m = &means[i];
+        m->numInCluster = 0;
+        m->sumL = 0.0; m->suma = 0.0; m->sumb = 0.0;
     }
     //Initialise colour array
     for (long long i = 0; i < numPixels; i++)
     {
         colours[i] = ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixels[i])), bright, contrast);
     }
-    //Pick some means
-    for (int i = 0; i < numColours; i++)
+    //Pick some means (k-means||)
+    ColourOkLabA* csamples = (ColourOkLabA*)malloc(17 * numColours * sizeof(ColourOkLabA));
+    double* probs = (double*)malloc(numPixels * sizeof(double));
+    unsigned long long rnum = RNGUpdate() % numPixels;
+    csamples[0] = colours[rnum];
+    int totalSamples = 1;
+    int sampPerIter = 2 * numColours;
+    //Pick some initial points
+    for (int i = 0; i < 8; i++)
     {
-        KMean m = means[i];
-        unsigned int rnum = RNGUpdate() % numPixels;
-        ColourOkLabA meancol = colours[rnum];
-        m.mean = meancol;
-        means[i] = m;
+        //Cost calculation
+        double cost = 0.0;
+        #pragma omp parallel for
+        for (long long j = 0; j < numPixels; j++)
+        {
+            ColourOkLabA col = colours[j];
+            float lowestDistance = 999999999999999999999999.9;
+            for (int k = 0; k < totalSamples; k++)
+            {
+                const ColourOkLabA incol = csamples[k];
+                const float dL = (col.L - incol.L) * uvbias;
+                const float da = col.a - incol.a;
+                const float db = col.b - incol.b;
+                const float dist = (dL * dL) + (da * da) + (db * db);
+                if (dist < lowestDistance)
+                {
+                    lowestDistance = dist;
+                }
+            }
+            #pragma omp atomic update
+            cost += (double)lowestDistance;
+            probs[j] = (double)lowestDistance;
+        }
+        double probmod = ((double)sampPerIter)/cost;
+        double cumProb = 0.0; //hee hee
+        for (long long j = 0; j < numPixels; j++)
+        {
+            cumProb += probmod * probs[j];
+            probs[j] = cumProb;
+        }
+        //Pick samples
+        #pragma omp parallel for
+        for (int j = 0; j < sampPerIter; j++)
+        {
+            double p = ((RNGUpdateDouble() * 0.5) + 0.5) * cumProb;
+            long long ind = numPixels/2;
+            long long lBound = 0;
+            long long uBound = numPixels - 1;
+            while (ind != lBound || ind != uBound)
+            {
+                if (p < probs[ind])
+                {
+                    uBound = ind;
+                }
+                else
+                {
+                    lBound = ind + 1;
+                }
+                ind = lBound + ((uBound - lBound)/2);
+            }
+            csamples[totalSamples] = colours[ind];
+            totalSamples++;
+        }
+    }
+    //Weight the points
+    long long* weights = (long long*)calloc(totalSamples, sizeof(long long));
+    for (long long i = 0; i < numPixels; i++)
+    {
+        ColourOkLabA col = colours[i];
+        float lowestDistance = 999999999999999999999999.9;
+        int chosenColour = 0;
+        for (int j = 0; j < totalSamples; j++)
+        {
+            const ColourOkLabA incol = csamples[j];
+            const float dL = (col.L - incol.L) * uvbias;
+            const float da = col.a - incol.a;
+            const float db = col.b - incol.b;
+            const float dist = (dL * dL) + (da * da) + (db * db);
+            if (dist < lowestDistance)
+            {
+                lowestDistance = dist;
+                chosenColour = j;
+            }
+        }
+        weights[chosenColour]++;
+    }
+    //Recluster according to k-means++
+    KMean* initM = &means[0];
+    rnum = RNGUpdate() % totalSamples;
+    initM->mean = csamples[rnum];
+    for (int i = 1; i < numColours; i++)
+    {
+        //Cost calculation
+        double cost = 0.0;
+        for (int j = 0; j < totalSamples; j++)
+        {
+            ColourOkLabA col = csamples[j];
+            float lowestDistance = 999999999999999999999999.9;
+            for (int k = 0; k < i; k++)
+            {
+                const ColourOkLabA incol = means[k].mean;
+                const float dL = (col.L - incol.L) * uvbias;
+                const float da = col.a - incol.a;
+                const float db = col.b - incol.b;
+                const float dist = (dL * dL) + (da * da) + (db * db);
+                if (dist < lowestDistance)
+                {
+                    lowestDistance = dist;
+                }
+            }
+            cost += (double)lowestDistance;
+            probs[j] = (double)lowestDistance;
+        }
+        double probmod = ((double)sampPerIter)/cost;
+        double cumProb = 0.0; //hee hee
+        for (long long j = 0; j < totalSamples; j++)
+        {
+            cumProb += probmod * probs[j] * ((double)weights[j]);
+            probs[j] = cumProb;
+        }
+        double p = ((RNGUpdateDouble() * 0.5) + 0.5) * cumProb;
+        int ind = totalSamples/2;
+        int lBound = 0;
+        int uBound = totalSamples - 1;
+        while (ind != lBound || ind != uBound)
+        {
+            if (p < probs[ind])
+            {
+                uBound = ind;
+            }
+            else
+            {
+                lBound = ind + 1;
+            }
+            ind = lBound + ((uBound - lBound)/2);
+        }
+        means[i].mean = csamples[ind];
     }
 
+    free(probs);
+    free(weights);
+    free(csamples);
+
     //Iterate the means
-    int iterationsLeft = numColours + 48;
+    int iterationsLeft = 696969;
     while (iterationsLeft > 0)
     {
         //Zero out sums and counts
         for (int i = 0; i < numColours; i++)
         {
-            KMean m = means[i];
-            m.lastmean = m.mean;
-            m.numInCluster = 0;
-            m.sumL = 0.0; m.suma = 0.0; m.sumb = 0.0;
-            means[i] = m;
+            KMean* m = &means[i];
+            m->lastmean = m->mean;
+            m->numInCluster = 0;
+            m->sumL = 0.0; m->suma = 0.0; m->sumb = 0.0;
         }
 
         //Associate each colour with the closest mean
-        #pragma omp parallel for shared(means)
+        #pragma omp parallel for
         for (long long i = 0; i < numPixels; i++)
         {
             ColourOkLabA col = colours[i];
@@ -405,9 +536,13 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
                 }
             }
             KMean* m = &means[chosenColour];
-            m->sumL += (double)col.L;
-            m->suma += (double)col.a;
-            m->sumb += (double)col.b;
+            #pragma omp atomic update
+            m->sumL += col.L;
+            #pragma omp atomic update
+            m->suma += col.a;
+            #pragma omp atomic update
+            m->sumb += col.b;
+            #pragma omp atomic update
             m->numInCluster++;
         }
 
@@ -415,9 +550,9 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         double meandiff = 0.0;
         for (int i = 0; i < numColours; i++)
         {
-            KMean m = means[i];
+            KMean* m = &means[i];
             ColourOkLabA meancol;
-            if (m.numInCluster <= 0) //Fallback because of suspected division by zero errors;
+            if (m->numInCluster <= 0) //Fallback because of suspected division by zero errors;
             {
                 meancol.L = (RNGUpdateFloat() * 0.5f) + 0.5f;
                 meancol.a = RNGUpdateFloat() * 0.5f;
@@ -425,20 +560,20 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
             }
             else
             {
-                meancol.L = m.sumL/((double)m.numInCluster);
-                meancol.a = m.suma/((double)m.numInCluster);
-                meancol.b = m.sumb/((double)m.numInCluster);
+                meancol.L = m->sumL/((double)m->numInCluster);
+                meancol.a = m->suma/((double)m->numInCluster);
+                meancol.b = m->sumb/((double)m->numInCluster);
             }
             meancol.A = 1.0f;
-            m.mean = meancol;
-            const float dL = (m.mean.L - m.lastmean.L) * uvbias;
-            const float da = m.mean.a - m.lastmean.a;
-            const float db = m.mean.b - m.lastmean.b;
-            const float dist = (dL * dL) + (da * da) + (db * db);
-            meandiff += sqrt((double)dist);
-            means[i] = m;
+            m->mean = meancol;
+            const double dL = (((double)m->mean.L) - ((double)m->lastmean.L)) * ((double)uvbias);
+            const double da = ((double)m->mean.a) - ((double)m->lastmean.a);
+            const double db = ((double)m->mean.b) - ((double)m->lastmean.b);
+            const double dist = (dL * dL) + (da * da) + (db * db);
+            meandiff += sqrt(dist);
         }
-        if (meandiff < 0.005) iterationsLeft = 0; //Break out if convergence has been reached
+        printf("meandiff: %.10f\n", meandiff);
+        if (meandiff == 0.0) iterationsLeft = 0; //Break out if convergence has been reached
         iterationsLeft--;
     }
 
@@ -452,7 +587,6 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
 
     GetLabPaletteFromRGBA8Palette();
 
-    free(means);
     free(colours);
 
     return false;

@@ -227,18 +227,27 @@ public:
     inline ImageInfo* GetEncodedImage() { return &encImage; }
 
 private:
-    inline unsigned int RNGUpdate()
+    inline unsigned long long RNGUpdate()
     {
         return rng();
     }
 
     inline float RNGUpdateFloat()
     {
-        unsigned int r = RNGUpdate();
+        unsigned long long r = RNGUpdate();
         unsigned int o = 0x3F800000; //1.0
-        o |= r >> 9;
+        o |= r >> 41;
         float f = *((float*)(&o)); //Should be between 1 and ~2
         return 2.0f * (f - 1.5f); //Should be between -1 and ~1
+    }
+
+    inline double RNGUpdateDouble()
+    {
+        unsigned long long r = RNGUpdate();
+        unsigned long long o = 0x3FF0000000000000; //1.0
+        o |= r >> 12;
+        double f = *((double*)(&o)); //Should be between 1 and ~2
+        return 2.0 * (f - 1.5); //Should be between -1 and ~1
     }
 
     void GetLabPaletteFromRGBA8Palette();
@@ -259,7 +268,7 @@ private:
     ColourRGBA8 DitherFilterLite(ColourOkLabA col, int x, int y, int w, float amtL, float amtC, float bright, float contrast, float uvbias, ColourOkLabA* diffErr, int boustro, float rngAmtL, float rngAmtC);
     ColourRGBA8 DitherAtkinson(ColourOkLabA col, int x, int y, int w, float amtL, float amtC, float bright, float contrast, float uvbias, ColourOkLabA* diffErr, int boustro, float rngAmtL, float rngAmtC);
 
-    std::mt19937 rng;
+    std::mt19937_64 rng;
     ImageInfo srcImage;
     ImageInfo encImage;
     ColourRGBA8 palette[256];
