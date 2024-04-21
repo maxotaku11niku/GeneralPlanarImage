@@ -19,43 +19,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Application root
+ * Image compressor
  */
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/application.h>
-#include <gtkmm/builder.h>
-#include <gtkmm/aboutdialog.h>
-#include "mainwindow.h"
 #include "imagehandler.h"
-#include "imagecompressor.h"
 
-class GPITool : public Gtk::Application
+class ImageCompressor
 {
 public:
-    static Glib::RefPtr<GPITool> create();
+    ImageCompressor();
+    ~ImageCompressor();
 
-protected:
-    GPITool();
-
-    void on_startup() override;
-    void on_activate() override;
+    int CompressAndSaveImageDeflate(char* outFileName);
+    inline void SetImageHandler(ImageHandler* handler) { ihand = handler; }
 
 private:
-    void CreateWindow();
-
-    void OnHideWindow(Gtk::Window* window);
-    void OnMenuFileOpen();
-    void OnMenuFileExport();
-    void OnMenuFileQuit();
-    void OnMenuHelpAbout();
-    void OnAboutDialogResponse(int responseID);
-
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Gtk::AboutDialog aboutDialog;
-    MainWindow* mwin;
     ImageHandler* ihand;
-    ImageCompressor* icomp;
 };

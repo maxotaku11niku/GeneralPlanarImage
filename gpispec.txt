@@ -4,7 +4,7 @@ Header:
 0x00    "GPI" (0x47 0x50 0x49)  magic number
 0x03    uint8                   flags
         0000 BEFC
-        C - compression method (0 - LZ77, 1 - reserved)
+        C - compression method (0 - Deflate, 1 - reserved)
         F - use filtering?
         E - endianness of bits in bytes (0 - 01234567, 1 - 76543210, where increasing numbers correspond to moving pixels to the right)
         B - palette entry bits per channel (0 - 4 bits per channel, 1 - 8 bits per channel)
@@ -38,12 +38,8 @@ Note: if filtering is disabled, the corresponding steps are not done, simplifyin
 
 For each plane:
 Compression header:
-LZ77 compression:
-0x0000  uint8  lzescape1
-0x0001  uint8  lzescape2
-The two least used bytes should be chosen to be escape bytes
-If the escape bytes are the same, then the plane wasn't LZ compressed nor filtered (filtering is only necessary if the plane is being compressed, otherwise it's a useless exercise). Conventionally, if they are the same, they should both be 0x00.
-0x0002  uint32 compressedSize
+Deflate compression:
+0x0000  uint32 compressedSize
 
 If filtering is enabled:
 0x0000  uint4[height*numTiles] filter specification for each line
@@ -74,15 +70,8 @@ palette indices
 Before:  0000000099999999 (for example)
 After:   0123406089AB9DE9
 
-LZ77 compression:
-If one of the escape bytes is encountered, then the following byte(s) determine(s) how to decompress according to the logic of LZ77
-lzescape1  LLLD DDDD:
-    LLL -> length of sequence - 3 (-1 if DDDDD = 0)
-    DDDDD -> distance to go back and start copying from (relative to the escape byte)
-lzescape2  DDDD DDDD  LLLL LLDD:
-    LLLLLL -> length of sequence - 4 (-1 if DDDDDDDDDD = 0)
-    DDDDDDDDDD -> distance to go back and start copying from (relative to the escape byte)
-Note that an encoder should only use these sequences if they will save space, which is why the length fields are biased to reduce the number of redundant possibilities.
+Deflate compression:
+Uses zlib's implementation (see http://zlib.net/ for more information). I have decided that it would be much better to use a well-tested compression algorithm instead of devising my own.
 
 Schematic defiltering routine (one plane):
 
@@ -212,66 +201,4 @@ for (int i = 0; i < height*numTiles; i++)
             }
             break;
     }
-}
-
-Schematic LZ decompression routine (one plane):
-
-uint32_t compressedSize;
-uint8_t lzescape1;
-uint8_t lzescape2;
-uint8_t* compressedData;
-uint8_t* filtData;
-for (int i = 0; i < compressedSize; i++)
-{
-    uint8_t in = compressedData[i];
-    if (in == lzescape1)
-    {
-        i++;
-        uint8_t specbyte = compressedData[i];
-        int length = (specbyte & 0xE0) >> 5;
-        int dist = specbyte & 0x1F;
-        if (dist == 0)
-        {
-            length++;
-            for (int j = 0; j < length; j++)
-            {
-                *filtData++ = lzescape1;
-            }
-        }
-        else
-        {
-            length += 3;
-            uint8_t* copybackPtr = filtData - dist;
-            for (int j = 0; j < length; j++)
-            {
-                *filtData++ = *copybackPtr++;
-            }
-        }
-    }
-    else if (in == lzescape2)
-    {
-        i++;
-        uint16_t specword = *((uint16_t*)(&compressedData[i]));
-        i++;
-        int length = (specword & 0xFC00) >> 10;
-        int dist = specword & 0x03FF;
-        if (dist == 0)
-        {
-            length++;
-            for (int j = 0; j < length; j++)
-            {
-                *filtData++ = lzescape2;
-            }
-        }
-        else
-        {
-            length += 4;
-            uint8_t* copybackPtr = filtData - dist;
-            for (int j = 0; j < length; j++)
-            {
-                *filtData++ = *copybackPtr++;
-            }
-        }
-    }
-    else *filtData++ = in;
 }

@@ -58,6 +58,18 @@ typedef struct
     ColourRGBA8* data;
 } ImageInfo;
 
+typedef struct
+{
+    unsigned char** planeData;
+    unsigned short planeMask;
+    int planew;
+    int planeh;
+    int planeSize;
+    int numPlanes;
+    int numColours;
+    bool is8BitColour;
+} PlanarInfo;
+
 const float OkLabK1 = 0.206f;
 const float OkLabK2 = 0.03f;
 const float OkLabK3 = 1.17087378640776f;
@@ -223,8 +235,11 @@ public:
     void CloseImageFile();
     bool GetBestPalette(float uvbias, float bright, float contrast);
     void DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro);
+    PlanarInfo GeneratePlanarData();
+    static void FreePlanarData(PlanarInfo* pinfo);
 
     inline ImageInfo* GetEncodedImage() { return &encImage; }
+    inline ColourRGBA8* GetCurrentPalette() { return palette; }
 
 private:
     inline unsigned long long RNGUpdate()

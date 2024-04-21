@@ -253,8 +253,8 @@ int ImageHandler::OpenImageFile(char* inFileName)
     }
     png_read_update_info(pngPtr, pngInfoPtr);
     //Allocate and read in PNG
-    srcImage.data = (ColourRGBA8*)malloc(w * h * sizeof(ColourRGBA8));
-    unsigned char** rowPtrs = (unsigned char**)malloc(h * sizeof(unsigned char**));
+    srcImage.data = new ColourRGBA8[w * h];
+    unsigned char** rowPtrs = new unsigned char*[h];
     for (int i = 0; i < h; i++)
     {
         rowPtrs[i] = (unsigned char*)(srcImage.data + i * w);
@@ -266,11 +266,11 @@ int ImageHandler::OpenImageFile(char* inFileName)
     png_destroy_read_struct(&pngPtr, &pngInfoPtr, nullptr);
 
     fclose(file);
-    free(rowPtrs);
+    delete[] rowPtrs;
 
     encImage.width = w;
     encImage.height = h;
-    encImage.data = (ColourRGBA8*)malloc(w * h * sizeof(ColourRGBA8));
+    encImage.data = new ColourRGBA8[w * h];
     memcpy(encImage.data, srcImage.data, w * h * sizeof(ColourRGBA8));
 
     numColours = 16;
@@ -282,8 +282,8 @@ int ImageHandler::OpenImageFile(char* inFileName)
 
 void ImageHandler::CloseImageFile()
 {
-    free(srcImage.data);
-    free(encImage.data);
+    delete[] srcImage.data;
+    delete[] encImage.data;
 }
 
 typedef struct
@@ -345,7 +345,7 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     }
 
     //Do the k-means algorithm if there are more unique colours in the image than the number of colours in the palette
-    ColourOkLabA* colours = (ColourOkLabA*)malloc(numPixels * sizeof(ColourOkLabA));
+    ColourOkLabA* colours = new ColourOkLabA[numPixels];
     KMean means[256];
     //Initialise means
     for (int i = 0; i < numColours; i++)
@@ -360,8 +360,8 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         colours[i] = ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixels[i])), bright, contrast);
     }
     //Pick some means (k-means||)
-    ColourOkLabA* csamples = (ColourOkLabA*)malloc(17 * numColours * sizeof(ColourOkLabA));
-    double* probs = (double*)malloc(numPixels * sizeof(double));
+    ColourOkLabA* csamples = new ColourOkLabA[17 * numColours];
+    double* probs = new double[numPixels];
     unsigned long long rnum = RNGUpdate() % numPixels;
     csamples[0] = colours[rnum];
     int totalSamples = 1;
@@ -498,9 +498,9 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         means[i].mean = csamples[ind];
     }
 
-    free(probs);
+    delete[] probs;
     free(weights);
-    free(csamples);
+    delete[] csamples;
 
     //Iterate the means
     int iterationsLeft = 696969;
@@ -572,7 +572,6 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
             const double dist = (dL * dL) + (da * da) + (db * db);
             meandiff += sqrt(dist);
         }
-        printf("meandiff: %.10f\n", meandiff);
         if (meandiff == 0.0) iterationsLeft = 0; //Break out if convergence has been reached
         iterationsLeft--;
     }
@@ -587,7 +586,7 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
 
     GetLabPaletteFromRGBA8Palette();
 
-    free(colours);
+    delete[] colours;
 
     return false;
 }
@@ -683,7 +682,7 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
     {
         int ew = w + 2*EDD_EXPAND_X;
         int eh = h + EDD_EXPAND_Y_TOP + EDD_EXPAND_Y_BOTTOM; //Expand image to ease in error diffusion
-        ColourRGBA8* expandedInput = (ColourRGBA8*)malloc(ew * eh * sizeof(ColourRGBA));
+        ColourRGBA8* expandedInput = new ColourRGBA8[ew * eh];
         ColourOkLabA* diffusedError = (ColourOkLabA*)calloc(ew * eh, sizeof(ColourOkLabA));
         for (long long i = EDD_EXPAND_Y_TOP; i < eh - EDD_EXPAND_Y_BOTTOM; i++) //Clamp pixels outside image
         {
@@ -741,9 +740,155 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
             memcpy(&pixels[i * w], &expandedInput[(i + EDD_EXPAND_Y_TOP) * ew + EDD_EXPAND_X], w * sizeof(ColourRGBA8));
         }
         free(diffusedError);
-        free(expandedInput);
+        delete[] expandedInput;
     }
 }
+
+PlanarInfo ImageHandler::GeneratePlanarData()
+{
+    PlanarInfo outinf;
+    outinf.is8BitColour = false;
+
+    if (numColours <= 2)
+    {
+        outinf.numColours = 2;
+        outinf.numPlanes = 1;
+        outinf.planeMask = 0x0001; //temp
+    }
+    else if (numColours <= 4)
+    {
+        outinf.numColours = 4;
+        outinf.numPlanes = 2;
+        outinf.planeMask = 0x0003; //temp
+    }
+    else if (numColours <= 8)
+    {
+        outinf.numColours = 8;
+        outinf.numPlanes = 3;
+        outinf.planeMask = 0x0007; //temp
+    }
+    else if (numColours <= 16)
+    {
+        outinf.numColours = 16;
+        outinf.numPlanes = 4;
+        outinf.planeMask = 0x000F; //temp
+    }
+    else if (numColours <= 32)
+    {
+        outinf.numColours = 32;
+        outinf.numPlanes = 5;
+        outinf.planeMask = 0x001F; //temp
+    }
+    else if (numColours <= 64)
+    {
+        outinf.numColours = 64;
+        outinf.numPlanes = 6;
+        outinf.planeMask = 0x003F; //temp
+    }
+    else if (numColours <= 128)
+    {
+        outinf.numColours = 128;
+        outinf.numPlanes = 7;
+        outinf.planeMask = 0x007F; //temp
+    }
+    else if (numColours <= 256)
+    {
+        outinf.numColours = 256;
+        outinf.numPlanes = 8;
+        outinf.planeMask = 0x00FF; //temp
+    }
+    else
+    {
+        puts("Too many colours!!");
+        outinf.planeData = nullptr;
+        return outinf;
+    }
+
+    //Convert to indexed colour representation
+    int w = encImage.width;
+    int h = encImage.height;
+    long long imgsize = ((long long)w) * ((long long)h);
+    int pwidth = (w + 0x7)/0x8;
+    int psize = pwidth * h;
+    outinf.planew = pwidth;
+    outinf.planeh = h;
+    outinf.planeSize = psize;
+    short* indices = new short[imgsize];
+    uint32_t* img = (uint32_t*)encImage.data;
+    uint32_t* pal = (uint32_t*)palette;
+    int nc = outinf.numColours;
+    bool transparency = false;
+    for (int i = 0; i < imgsize; i++)
+    {
+        uint32_t pix = img[i];
+        bool foundcol = false;
+        for (int j = 0; j < nc; j++)
+        {
+            if (pix == pal[j])
+            {
+                indices[i] = j;
+                foundcol = true;
+                break;
+            }
+        }
+        if (!foundcol)
+        {
+            indices[i] = -1;
+            transparency = true;
+        }
+    }
+    unsigned char** pData = new unsigned char*[outinf.numPlanes];
+    outinf.planeData = pData;
+    int splane = 0;
+    for (int i = 0; i < outinf.numPlanes; i++)
+    {
+        pData[i] = (unsigned char*)calloc(psize, 1);
+    }
+    if (transparency) //Generate mask plane
+    {
+        outinf.numPlanes++;
+        outinf.planeMask |= 0x0100;
+        splane++;
+        unsigned char* curPlane = pData[0];
+        for (int i = 0; i < h; i++)
+        {
+            for (int j = 0; j < w; j++)
+            {
+                short ind = indices[i * w + j];
+                if (ind >= 0) curPlane[i * pwidth + (j >> 3)] |= (0x01 << (7 - (j & 0x7)));
+            }
+        }
+    }
+
+    for (int i = splane; i < outinf.numPlanes; i++)
+    {
+        unsigned char* curPlane = pData[i];
+        short curMask = 0x0001 << (i - splane);
+        for (int j = 0; j < h; j++)
+        {
+            for (int k = 0; k < w; k++)
+            {
+                short ind = indices[j * w + k];
+                if (ind & curMask)
+                {
+                    curPlane[j * pwidth + (k >> 3)] |= (0x01 << (7 - (k & 0x7)));
+                }
+            }
+        }
+    }
+
+    return outinf;
+}
+
+void ImageHandler::FreePlanarData(PlanarInfo* pinfo)
+{
+    for (int i = 0; i < pinfo->numPlanes; i++)
+    {
+        free(pinfo->planeData[i]);
+    }
+    delete[] pinfo->planeData;
+}
+
 
 void ImageHandler::GetLabPaletteFromRGBA8Palette()
 {

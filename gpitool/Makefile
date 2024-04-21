@@ -28,7 +28,7 @@ export LINKFLAGSBASE    :=
 export LINKFLAGSDEBUG   := $(LINKFLAGSBASE)
 export LINKFLAGSRELEASE := $(LINKFLAGSBASE) -Wl,-s
 export LINKFLAGS        := $(LINKFLAGSBASE)
-export LINKLIBS         := -lpng `pkg-config gtkmm-3.0 --libs`
+export LINKLIBS         := -lpng -lz -lm `pkg-config gtkmm-3.0 --libs`
 
 # Define some variable overrides
 default : CFLAGS = $(CFLAGSRELEASE)

@@ -81,6 +81,8 @@ GPITool::GPITool() : Gtk::Application()
 {
     Glib::set_application_name("GPITool");
     ihand = new ImageHandler();
+    icomp = new ImageCompressor();
+    icomp->SetImageHandler(ihand);
 }
 
 Glib::RefPtr<GPITool> GPITool::create()
@@ -181,6 +183,8 @@ void GPITool::OnMenuFileExport()
     switch(result)
     {
         case(Gtk::RESPONSE_OK):
+            puts("saving");
+            icomp->CompressAndSaveImageDeflate((char*)dialog.get_filename().c_str());
             break;
         case(Gtk::RESPONSE_CANCEL):
             break;
