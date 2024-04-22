@@ -5,3 +5,4 @@ gpitool/genasm/
 GPIVIEW/bin/
 GPIVIEW/obj/
 GPIVIEW/genasm/
+GPIVIEW/wholeprog.o

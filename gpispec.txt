@@ -103,7 +103,8 @@ for (int i = 0; i < height*numTiles; i++)
             for (int j = 0; j < bytewidth; j++)
             {
                 uint8_t in = filtData[j + curRow];
-                in ^= in >> 1 | carry;
+                in ^= carry;
+                in ^= in >> 1;
                 in ^= in >> 2;
                 in ^= in >> 4;
                 carry = (in & 0x01) << 7;
@@ -157,7 +158,8 @@ for (int i = 0; i < height*numTiles; i++)
             for (int j = 0; j < bytewidth; j++)
             {
                 uint8_t in = ~filtData[j + curRow];
-                in ^= in >> 1 | carry;
+                in ^= carry;
+                in ^= in >> 1;
                 in ^= in >> 2;
                 in ^= in >> 4;
                 carry = (in & 0x01) << 7;
