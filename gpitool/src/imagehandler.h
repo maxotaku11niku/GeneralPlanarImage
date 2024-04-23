@@ -93,19 +93,26 @@ const float LMStoSRGB[9] = { 4.0767416621f, -3.3077115913f,  0.2309699292f,
 inline ColourOkLabA ColourOkLabAAdd(ColourOkLabA l, ColourOkLabA r)
 {
     ColourOkLabA c;
-    c.L = l.L + r.L;
-    c.a = l.a + r.a;
-    c.b = l.b + r.b;
-    c.A = l.A + r.A;
+    float ca[4];
+    float la[4] = { l.L, l.a, l.b, l.A };
+    float ra[4] = { r.L, r.a, r.b, r.A };
+    for (int i = 0; i < 4; i++)
+    {
+        ca[i] = la[i] + ra[i];
+    }
+    c.L = ca[0]; c.a = ca[1]; c.b = ca[2]; c.A = ca[3];
     return c;
 }
 
 inline ColourOkLabA ColourOkLabAAddAccumulate(ColourOkLabA l, ColourOkLabA r)
 {
-    l.L += r.L;
-    l.a += r.a;
-    l.b += r.b;
-    l.A += r.A;
+    float la[4] = { l.L, l.a, l.b, l.A };
+    float ra[4] = { r.L, r.a, r.b, r.A };
+    for (int i = 0; i < 4; i++)
+    {
+        la[i] += ra[i];
+    }
+    l.L = la[0]; l.a = la[1]; l.b = la[2]; l.A = la[3];
     return l;
 }
 
@@ -113,38 +120,54 @@ inline ColourOkLabA ColourOkLabAMultiply(ColourOkLabA l, ColourOkLabA r)
 {
 
     ColourOkLabA c;
-    c.L = l.L * r.L;
-    c.a = l.a * r.a;
-    c.b = l.b * r.b;
-    c.A = l.A * r.A;
+    float ca[4];
+    float la[4] = { l.L, l.a, l.b, l.A };
+    float ra[4] = { r.L, r.a, r.b, r.A };
+    for (int i = 0; i < 4; i++)
+    {
+        ca[i] = la[i] * ra[i];
+    }
+    c.L = ca[0]; c.a = ca[1]; c.b = ca[2]; c.A = ca[3];
     return c;
 }
 
 inline ColourOkLabA ColourOkLabAMultiplyAccumulate(ColourOkLabA l, ColourOkLabA r)
 {
-    l.L *= r.L;
-    l.a *= r.a;
-    l.b *= r.b;
-    l.A *= r.A;
+    float la[4] = { l.L, l.a, l.b, l.A };
+    float ra[4] = { r.L, r.a, r.b, r.A };
+    for (int i = 0; i < 4; i++)
+    {
+        la[i] *= ra[i];
+    }
+    l.L = la[0]; l.a = la[1]; l.b = la[2]; l.A = la[3];
     return l;
 }
 
 inline ColourOkLabA ColourOkLabAFMA(ColourOkLabA a, ColourOkLabA ml, ColourOkLabA mr)
 {
     ColourOkLabA c;
-    c.L = a.L + (ml.L * mr.L);
-    c.a = a.a + (ml.a * mr.a);
-    c.b = a.b + (ml.b * mr.b);
-    c.A = a.A + (ml.A * mr.A);
+    float ca[4];
+    float aa[4] = { a.L, a.a, a.b, a.A };
+    float mla[4] = { ml.L, ml.a, ml.b, ml.A };
+    float mra[4] = { mr.L, mr.a, mr.b, mr.A };
+    for (int i = 0; i < 4; i++)
+    {
+        ca[i] = aa[i] + (mla[i] * mra[i]);
+    }
+    c.L = ca[0]; c.a = ca[1]; c.b = ca[2]; c.A = ca[3];
     return c;
 }
 
 inline ColourOkLabA ColourOkLabAFMAAccumulate(ColourOkLabA a, ColourOkLabA ml, ColourOkLabA mr)
 {
-    a.L += ml.L * mr.L;
-    a.a += ml.a * mr.a;
-    a.b += ml.b * mr.b;
-    a.A += ml.A * mr.A;
+    float aa[4] = { a.L, a.a, a.b, a.A };
+    float mla[4] = { ml.L, ml.a, ml.b, ml.A };
+    float mra[4] = { mr.L, mr.a, mr.b, mr.A };
+    for (int i = 0; i < 4; i++)
+    {
+        aa[i] += (mla[i] * mra[i]);
+    }
+    a.L = aa[0]; a.a = aa[1]; a.b = aa[2]; a.A = aa[3];
     return a;
 }
 
@@ -234,6 +257,7 @@ public:
     int OpenImageFile(char* inFileName);
     void CloseImageFile();
     bool GetBestPalette(float uvbias, float bright, float contrast);
+    void ShufflePaletteBasedOnOccurrence();
     void DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro);
     PlanarInfo GeneratePlanarData();
     static void FreePlanarData(PlanarInfo* pinfo);

@@ -159,6 +159,7 @@ void GPITool::OnMenuFileOpen()
             {
                 ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
             }
+            ihand->ShufflePaletteBasedOnOccurrence();
             mwin->SetNewImageThumbnail(ihand);
             break;
         case(Gtk::RESPONSE_CANCEL):

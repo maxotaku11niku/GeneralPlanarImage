@@ -591,6 +591,50 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     return false;
 }
 
+void ImageHandler::ShufflePaletteBasedOnOccurrence()
+{
+    int w = encImage.width;
+    int h = encImage.height;
+    long long imgsize = ((long long)w) * ((long long)h);
+    uint32_t* pixels = (uint32_t*)encImage.data;
+    uint32_t* pal = (uint32_t*)palette;
+    int occurrence[256];
+    memset(occurrence, 0, sizeof(occurrence));
+    for (long long i = 0; i < imgsize; i++)
+    {
+        uint32_t pix = pixels[i];
+        for (int j = 0; j < numColours; j++)
+        {
+            if (pix == pal[j])
+            {
+                occurrence[j]++;
+            }
+        }
+    }
+    uint32_t tempPal[256];
+    memcpy(tempPal, pal, sizeof(tempPal));
+    for (int i = 0; i < numColours-1; i++)
+    {
+        int highestOcc = occurrence[i];
+        int chosenColour = i;
+        for (int j = i + 1; j < numColours; j++)
+        {
+            int occ = occurrence[j];
+            if (occ > highestOcc)
+            {
+                highestOcc = occ;
+                chosenColour = j;
+            }
+        }
+        uint32_t currentColour = tempPal[i];
+        uint32_t swapColour = tempPal[chosenColour];
+        tempPal[chosenColour] = currentColour;
+        tempPal[i] = swapColour;
+    }
+    memcpy(pal, tempPal, sizeof(tempPal));
+}
+
+
 void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro)
 {
     ColourRGBA8 (ImageHandler::*odfunc)(ColourOkLabA, int, int, float, float, float, float, float, float);

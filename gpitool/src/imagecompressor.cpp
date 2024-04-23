@@ -120,6 +120,7 @@ int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
     //Compress planes
     unsigned char* filterTable = new unsigned char[(pinfo.planeh+1)/2];
     unsigned char* fPlane = new unsigned char[pinfo.planeSize];
+    unsigned int* rowOccurrence = new unsigned int[pinfo.planeh * 256];
     unsigned char* fRows[16];
     for (int i = 0; i < 16; i++)
     {
@@ -141,305 +142,348 @@ int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
         int tempOccurrence[256*16];
         double entropy[16];
         memset(totalOccurrence, 0, sizeof(totalOccurrence));
-        for (int j = 0; j < ph; j++)
+        for (int j = 0; j < 4; j++)
         {
-            //Try all valid filters
-            memset(tempOccurrence, 0, sizeof(tempOccurrence));
-            for (int k = 0; k < 16; k++)
+            for (int k = 0; k < ph; k++)
             {
-                if (j == 0 && k & 0x8) //Reject NOT filters on the first line, we don't want to bias towards a needlessly complicated filter
+                //Try all valid filters
+                memset(tempOccurrence, 0, sizeof(tempOccurrence));
+
+                if (j > 0) //Correct for multipass operation
                 {
-                    entropy[k] = 9999999999999999999999999999.9;
-                    continue;
+                    for (int n = 0; n < 256; n++)
+                    {
+                        totalOccurrence[n] -= rowOccurrence[256 * k + n];
+                    }
                 }
-                int filtType = k & 0x7;
-                switch (filtType) //Initial validation
+
+                for (int n = 0; n < 16; n++)
                 {
-                    case 0: //filt = S[x,y], unconditional
-                    case 1: //filt = S[x,y] XOR S[x-1,y], unconditional
-                        break;
-                    case 2: //filt = S[x,y] XOR S[x,y-1], current y must not be 0
-                        if (j < 1)
-                        {
-                            entropy[k] = 9999999999999999999999999999.9;
-                            continue;
-                        }
-                        break;
-                    case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), current tile must not be 0 (TODO)
-                        entropy[k] = 9999999999999999999999999999.9;
+                    if (k == 0 && n & 0x8) //Reject NOT filters on the first line, we don't want to bias towards a needlessly complicated filter
+                    {
+                        entropy[n] = 9999999999999999999999999999.9;
                         continue;
-                    case 4: //filt = S[x,y] XOR S[x,y] one plane before, current plane must be 1 or higher
-                        if (i < 1)
-                        {
-                            entropy[k] = 9999999999999999999999999999.9;
+                    }
+                    int filtType = n & 0x7;
+                    switch (filtType) //Initial validation
+                    {
+                        case 0: //filt = S[x,y], unconditional
+                        case 1: //filt = S[x,y] XOR S[x-1,y], unconditional
+                            break;
+                        case 2: //filt = S[x,y] XOR S[x,y-1], current y must not be 0
+                            if (j < 1)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
+                        case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), current tile must not be 0 (TODO)
+                            entropy[n] = 9999999999999999999999999999.9;
                             continue;
-                        }
-                        break;
-                    case 5: //filt = S[x,y] XOR S[x,y] two planes before, current plane must be 2 or higher
-                        if (i < 2)
+                        case 4: //filt = S[x,y] XOR S[x,y] one plane before, current plane must be 1 or higher
+                            if (i < 1)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
+                        case 5: //filt = S[x,y] XOR S[x,y] two planes before, current plane must be 2 or higher
+                            if (i < 2)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
+                        case 6: //filt = S[x,y] XOR S[x,y] three planes before, current plane must be 3 or higher
+                            if (i < 3)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
+                        case 7: //filt = S[x,y] XOR S[x,y] four planes before, current plane must be 4 or higher
+                            if (i < 4)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
+                    }
+
+                    //Filter line
+                    switch (n)
+                    {
+                        case 0: //filt = S[x,y]
+                            memcpy(fRows[n], &curPlane[k * pw], pw);
+                            break;
+                        case 1: //filt = S[x,y] XOR S[x-1,y]
                         {
-                            entropy[k] = 9999999999999999999999999999.9;
-                            continue;
+                            unsigned char carry = 0;
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in = curPlane[k * pw + m];
+                                unsigned char out = in ^ ((in >> 1) | carry);
+                                if (in & 0x01) carry = 0x80;
+                                else carry = 0x00;
+                                fRows[n][m] = out;
+                            }
                         }
-                        break;
-                    case 6: //filt = S[x,y] XOR S[x,y] three planes before, current plane must be 3 or higher
-                        if (i < 3)
+                            break;
+                        case 2: //filt = S[x,y] XOR S[x,y-1]
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = curPlane[(k - 1) * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
+                            break;
+                        case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before)
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = curPlane[(k - ph) * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
+                            break;
+                        case 4: //filt = S[x,y] XOR S[x,y] one plane before
                         {
-                            entropy[k] = 9999999999999999999999999999.9;
-                            continue;
+                            unsigned char* tPlane = pinfo.planeData[i-1];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
                         }
-                        break;
-                    case 7: //filt = S[x,y] XOR S[x,y] four planes before, current plane must be 4 or higher
-                        if (i < 4)
+                            break;
+                        case 5: //filt = S[x,y] XOR S[x,y] two planes before
                         {
-                            entropy[k] = 9999999999999999999999999999.9;
-                            continue;
+                            unsigned char* tPlane = pinfo.planeData[i-2];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
                         }
-                        break;
+                            break;
+                        case 6: //filt = S[x,y] XOR S[x,y] three planes before
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-3];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
+                        }
+                            break;
+                        case 7: //filt = S[x,y] XOR S[x,y] four planes before
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-4];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = out;
+                            }
+                        }
+                            break;
+                        case 8: //filt = NOT(S[x,y])
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in = curPlane[k * pw + m];
+                                fRows[n][m] = ~in;
+                            }
+                            break;
+                        case 9: //filt = NOT(S[x,y] XOR S[x-1,y])
+                        {
+                            unsigned char carry = 0;
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in = curPlane[k * pw + m];
+                                unsigned char out = in ^ ((in >> 1) | carry);
+                                if (in & 0x01) carry = 0x80;
+                                else carry = 0x00;
+                                fRows[n][m] = ~out;
+                            }
+                        }
+                            break;
+                        case 10: //filt = NOT(S[x,y] XOR S[x,y-1])
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = curPlane[(k - 1) * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                            break;
+                        case 11: //filt = NOT(S[x,y] XOR S[x,y-height])
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = curPlane[(k - ph) * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                            break;
+                        case 12: //filt = NOT(S[x,y] XOR S[x,y] one plane before)
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-1];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                        }
+                            break;
+                        case 13: //filt = NOT(S[x,y] XOR S[x,y] two planes before)
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-2];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                        }
+                            break;
+                        case 14: //filt = NOT(S[x,y] XOR S[x,y] three planes before)
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-3];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                        }
+                            break;
+                        case 15: //filt = NOT(S[x,y] XOR S[x,y] four planes before)
+                        {
+                            unsigned char* tPlane = pinfo.planeData[i-4];
+                            for (int m = 0; m < pw; m++)
+                            {
+                                unsigned char in1 = curPlane[k * pw + m];
+                                unsigned char in2 = tPlane[k * pw + m];
+                                unsigned char out = in1 ^ in2;
+                                fRows[n][m] = ~out;
+                            }
+                        }
+                            break;
+                    }
+
+                    //Count the occurrence of each byte
+                    for (int m = 0; m < pw; m++)
+                    {
+                        tempOccurrence[(n * 256) + fRows[n][m]]++;
+                    }
+
+                    //Determine the total entropy of all lines determined so far and this one
+                    double tempEntropy = 0.0;
+                    if (j > 0) //Correct for multipass operation
+                    {
+                        for (int m = 0; m < 256; m++)
+                        {
+                            int occ = totalOccurrence[m] + tempOccurrence[(n * 256) + m];
+                            if (occ <= 0) continue;
+                            double prob = ((double)occ)/((double)((k+1) * pw));
+                            tempEntropy -= prob * log2(prob);
+                        }
+                    }
+                    else
+                    {
+                        for (int m = 0; m < 256; m++)
+                        {
+                            int occ = totalOccurrence[m] + tempOccurrence[(n * 256) + m];
+                            if (occ <= 0) continue;
+                            double prob = ((double)occ)/((double)(ph * pw));
+                            tempEntropy -= prob * log2(prob);
+                        }
+                    }
+                    entropy[n] = tempEntropy;
                 }
 
-                //Filter line
-                switch (k)
+                //Select locally best filter
+                int bestFilter = 0;
+                double bestEntropy = 999999999999999999999999999999.9;
+                for (int n = 0; n < 16; n++)
                 {
-                    case 0: //filt = S[x,y]
-                        memcpy(fRows[k], &curPlane[j * pw], pw);
-                        break;
-                    case 1: //filt = S[x,y] XOR S[x-1,y]
+                    double nextEntropy = entropy[n];
+                    if (nextEntropy <= bestEntropy)
                     {
-                        unsigned char carry = 0;
-                        for (int n = 0; n < pw; n++)
+                        if (nextEntropy == bestEntropy) //Tiebreak
                         {
-                            unsigned char in = curPlane[j * pw + n];
-                            unsigned char out = in ^ ((in >> 1) | carry);
-                            if (in & 0x01) carry = 0x80;
-                            else carry = 0x00;
-                            fRows[k][n] = out;
+                            if (!(bestFilter & 0x8) && n & 0x8) //Prefer filters that don't need a NOT over ones that do
+                            {
+                                continue;
+                            }
+                            switch (bestFilter & 0x7) //Tiebreaking uses nontrivial rules: we prefer 'simpler' filters over complicated ones
+                            {
+                                case 0: //filt = S[x,y], top priority (memcpy)
+                                    break;
+                                case 1: //filt = S[x,y] XOR S[x-1,y], lowest priority (complicated af)
+                                    bestFilter = n;
+                                    break;
+                                case 2: //filt = S[x,y] XOR S[x,y-1], medium priority (near pointer on DOS)
+                                case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), medium priority (near pointer on DOS)
+                                    break;
+                                case 4: //filt = S[x,y] XOR S[x,y] one plane before, low priority (far pointer on DOS)
+                                case 5: //filt = S[x,y] XOR S[x,y] two planes before, low priority (far pointer on DOS)
+                                case 6: //filt = S[x,y] XOR S[x,y] three planes before, low priority (far pointer on DOS)
+                                case 7: //filt = S[x,y] XOR S[x,y] four planes before, low priority (far pointer on DOS)
+                                    break;
+                            }
+                        }
+                        else //No need to tie break, so select straightforwardly
+                        {
+                            bestEntropy = nextEntropy;
+                            bestFilter = n;
                         }
                     }
-                        break;
-                    case 2: //filt = S[x,y] XOR S[x,y-1]
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = curPlane[(j - 1) * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                        break;
-                    case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before)
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = curPlane[(j - ph) * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                        break;
-                    case 4: //filt = S[x,y] XOR S[x,y] one plane before
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-1];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                    }
-                        break;
-                    case 5: //filt = S[x,y] XOR S[x,y] two planes before
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-2];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                    }
-                        break;
-                    case 6: //filt = S[x,y] XOR S[x,y] three planes before
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-3];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                    }
-                        break;
-                    case 7: //filt = S[x,y] XOR S[x,y] four planes before
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-4];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = out;
-                        }
-                    }
-                        break;
-                    case 8: //filt = NOT(S[x,y])
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in = curPlane[j * pw + n];
-                            fRows[k][n] = ~in;
-                        }
-                        break;
-                    case 9: //filt = NOT(S[x,y] XOR S[x-1,y])
-                    {
-                        unsigned char carry = 0;
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in = curPlane[j * pw + n];
-                            unsigned char out = in ^ ((in >> 1) | carry);
-                            if (in & 0x01) carry = 0x80;
-                            else carry = 0x00;
-                            fRows[k][n] = ~out;
-                        }
-                    }
-                        break;
-                    case 10: //filt = NOT(S[x,y] XOR S[x,y-1])
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = curPlane[(j - 1) * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                        break;
-                    case 11: //filt = NOT(S[x,y] XOR S[x,y-height])
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = curPlane[(j - ph) * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                        break;
-                    case 12: //filt = NOT(S[x,y] XOR S[x,y] one plane before)
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-1];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                    }
-                        break;
-                    case 13: //filt = NOT(S[x,y] XOR S[x,y] two planes before)
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-2];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                    }
-                        break;
-                    case 14: //filt = NOT(S[x,y] XOR S[x,y] three planes before)
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-3];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                    }
-                        break;
-                    case 15: //filt = NOT(S[x,y] XOR S[x,y] four planes before)
-                    {
-                        unsigned char* tPlane = pinfo.planeData[i-4];
-                        for (int n = 0; n < pw; n++)
-                        {
-                            unsigned char in1 = curPlane[j * pw + n];
-                            unsigned char in2 = tPlane[j * pw + n];
-                            unsigned char out = in1 ^ in2;
-                            fRows[k][n] = ~out;
-                        }
-                    }
-                        break;
                 }
-
-                //Count the occurrence of each byte
-                for (int n = 0; n < pw; n++)
+                if (bestFilter != 0)
                 {
-                    tempOccurrence[(k * 256) + fRows[k][n]]++;
+                    isFiltered = true;
                 }
-
-                //Determine the total entropy of all lines determined so far and this one
-                double tempEntropy = 0.0;
+                if (j > 0) //Correct for multipass operation
+                {
+                    unsigned char fte = filterTable[k >> 1];
+                    if (k & 0x1)
+                    {
+                        fte &= 0x0F;
+                        fte |= (unsigned char)(bestFilter << 4);
+                        filterTable[k >> 1] = fte;
+                    }
+                    else
+                    {
+                        fte &= 0xF0;
+                        fte |= (unsigned char)bestFilter;
+                        filterTable[k >> 1] = fte;
+                    }
+                }
+                else
+                {
+                    if (k & 0x1) filterTable[k >> 1] |= (unsigned char)(bestFilter << 4);
+                    else filterTable[k >> 1] = (unsigned char)bestFilter;
+                }
+                memcpy(&fPlane[k * pw], fRows[bestFilter], pw);
                 for (int n = 0; n < 256; n++)
                 {
-                    int occ = totalOccurrence[n] + tempOccurrence[(k * 256) + n];
-                    if (occ <= 0) continue;
-                    double prob = ((double)occ)/((double)((j+1) * pw));
-                    tempEntropy -= prob * log2(prob);
-                }
-                entropy[k] = tempEntropy;
-            }
-
-            //Select locally best filter
-            int bestFilter = 0;
-            double bestEntropy = 999999999999999999999999999999.9;
-            for (int k = 0; k < 16; k++)
-            {
-                double nextEntropy = entropy[k];
-                if (nextEntropy <= bestEntropy)
-                {
-                    if (nextEntropy == bestEntropy) //Tiebreak
-                    {
-                        if (!(bestFilter & 0x8) && k & 0x8) //Prefer filters that don't need a NOT over ones that do
-                        {
-                            continue;
-                        }
-                        switch (bestFilter & 0x7) //Tiebreaking uses nontrivial rules: we prefer 'simpler' filters over complicated ones
-                        {
-                            case 0: //filt = S[x,y], top priority (memcpy)
-                                break;
-                            case 1: //filt = S[x,y] XOR S[x-1,y], lowest priority (complicated af)
-                                bestFilter = k;
-                                break;
-                            case 2: //filt = S[x,y] XOR S[x,y-1], medium priority (near pointer on DOS)
-                            case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), medium priority (near pointer on DOS)
-                                break;
-                            case 4: //filt = S[x,y] XOR S[x,y] one plane before, low priority (far pointer on DOS)
-                            case 5: //filt = S[x,y] XOR S[x,y] two planes before, low priority (far pointer on DOS)
-                            case 6: //filt = S[x,y] XOR S[x,y] three planes before, low priority (far pointer on DOS)
-                            case 7: //filt = S[x,y] XOR S[x,y] four planes before, low priority (far pointer on DOS)
-                                break;
-                        }
-                    }
-                    else //No need to tie break, so select straightforwardly
-                    {
-                        bestEntropy = nextEntropy;
-                        bestFilter = k;
-                    }
+                    rowOccurrence[256 * k + n] = tempOccurrence[(bestFilter * 256) + n];
+                    totalOccurrence[n] += tempOccurrence[(bestFilter * 256) + n];
                 }
             }
-            if (bestFilter != 0)
-            {
-                isFiltered = true;
-            }
-            if (j & 0x1) filterTable[j >> 1] |= (unsigned char)(bestFilter << 4);
-            else filterTable[j >> 1] = (unsigned char)bestFilter;
-            memcpy(&fPlane[j * pw], fRows[bestFilter], pw);
-            for (int k = 0; k < 256; k++)
-            {
-                totalOccurrence[k] += tempOccurrence[(bestFilter * 256) + k];
-            }
-
-            printf("Plane %i/%i, row %i/%i, best filter %1x, bits per 8 pixels %.6f\n", i+1, pinfo.numPlanes, j+1, ph, bestFilter, entropy[bestFilter]);
         }
 
         //Copy filter table into the compressed data section
