@@ -218,7 +218,88 @@ local int stored(struct state *s)
 struct huffman {
     short *count;       /* number of symbols of each length */
     short *symbol;      /* canonically ordered symbols */
+    short *lut; //MH - Reference the LUT
+    int postIndex; //MH - Needed if required symbol is not in the LUT
+    int postFirst; //MH - Needed if required symbol is not in the LUT
 };
+
+//MH - Accelerates bit reversal operation for the codes
+static const unsigned char byteRevTable[256] = { 0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0,
+                                                 0x08, 0x88, 0x48, 0xC8, 0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8,
+                                                 0x04, 0x84, 0x44, 0xC4, 0x24, 0xA4, 0x64, 0xE4, 0x14, 0x94, 0x54, 0xD4, 0x34, 0xB4, 0x74, 0xF4,
+                                                 0x0C, 0x8C, 0x4C, 0xCC, 0x2C, 0xAC, 0x6C, 0xEC, 0x1C, 0x9C, 0x5C, 0xDC, 0x3C, 0xBC, 0x7C, 0xFC,
+                                                 0x02, 0x82, 0x42, 0xC2, 0x22, 0xA2, 0x62, 0xE2, 0x12, 0x92, 0x52, 0xD2, 0x32, 0xB2, 0x72, 0xF2,
+                                                 0x0A, 0x8A, 0x4A, 0xCA, 0x2A, 0xAA, 0x6A, 0xEA, 0x1A, 0x9A, 0x5A, 0xDA, 0x3A, 0xBA, 0x7A, 0xFA,
+                                                 0x06, 0x86, 0x46, 0xC6, 0x26, 0xA6, 0x66, 0xE6, 0x16, 0x96, 0x56, 0xD6, 0x36, 0xB6, 0x76, 0xF6,
+                                                 0x0E, 0x8E, 0x4E, 0xCE, 0x2E, 0xAE, 0x6E, 0xEE, 0x1E, 0x9E, 0x5E, 0xDE, 0x3E, 0xBE, 0x7E, 0xFE,
+                                                 0x01, 0x81, 0x41, 0xC1, 0x21, 0xA1, 0x61, 0xE1, 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF1,
+                                                 0x09, 0x89, 0x49, 0xC9, 0x29, 0xA9, 0x69, 0xE9, 0x19, 0x99, 0x59, 0xD9, 0x39, 0xB9, 0x79, 0xF9,
+                                                 0x05, 0x85, 0x45, 0xC5, 0x25, 0xA5, 0x65, 0xE5, 0x15, 0x95, 0x55, 0xD5, 0x35, 0xB5, 0x75, 0xF5,
+                                                 0x0D, 0x8D, 0x4D, 0xCD, 0x2D, 0xAD, 0x6D, 0xED, 0x1D, 0x9D, 0x5D, 0xDD, 0x3D, 0xBD, 0x7D, 0xFD,
+                                                 0x03, 0x83, 0x43, 0xC3, 0x23, 0xA3, 0x63, 0xE3, 0x13, 0x93, 0x53, 0xD3, 0x33, 0xB3, 0x73, 0xF3,
+                                                 0x0B, 0x8B, 0x4B, 0xCB, 0x2B, 0xAB, 0x6B, 0xEB, 0x1B, 0x9B, 0x5B, 0xDB, 0x3B, 0xBB, 0x7B, 0xFB,
+                                                 0x07, 0x87, 0x47, 0xC7, 0x27, 0xA7, 0x67, 0xE7, 0x17, 0x97, 0x57, 0xD7, 0x37, 0xB7, 0x77, 0xF7,
+                                                 0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF };
+
+//MH - Convenience function
+static inline unsigned char ReverseByte(unsigned char b)
+{
+    volatile register unsigned char result __asm("%al");
+    result = b;
+    __asm volatile (
+        "push %%ss\n\t"
+        "pop %%ds\n\t"
+        "xlat\n\t" //al = ds:[bx+al]
+    : "+a" (result) : "b" ((unsigned char*)byteRevTable) : "%ds");
+    return result;
+}
+
+//MH - Makes a partial LUT for a Huffman tree
+static void ConstructHuffLUT(struct huffman* h, short* table)
+{
+    int count;
+    int index = 0;
+    int code = 0;
+    int addradd = 2;
+    int reps = 128;
+    short* next = h->count + 1;
+
+    //MH - Initialise the table with the escape symbol (memset function)
+    short* t = table;
+    __asm volatile (
+        "push %%ss\n\t"
+        "pop %%es\n\t"
+        "movw $256, %%cx\n\t"
+        "movw $-1, %%ax\n\t"
+        "rep stosw\n\t"
+    : "+D" (t) : : "%ax", "%cx", "%es");
+
+    for (int i = 1; i <= 8; i++)
+    {
+        count = *next++;
+        for (int j = 0; j < count; j++)
+        {
+            short symbol = h->symbol[index];
+            symbol |= i << 9; //MH - Store length of code above symbol bits
+            //MH - Lookup reverse bit pattern fast
+            int addr = ReverseByte(code << (8 - i));
+            index++;
+            for (int k = 0; k < reps; k++)
+            {
+                table[addr] = symbol;
+                addr += addradd;
+            }
+            code++;
+        }
+        code <<= 1;
+        addradd <<= 1;
+        reps >>= 1;
+    }
+
+    h->postIndex = index;
+    h->postFirst = code;
+    h->lut = table;
+}
 
 /*
  * Decode a code from the stream s using huffman table h.  Return the symbol or
@@ -282,7 +363,8 @@ local inline int decode(struct state *s, const struct huffman h)
     int first;          /* first code of length len */
     int count;          /* number of codes of length len */
     int index;          /* index of first code of length len in symbol table */
-    int bitbuf;         /* bits from stream */
+    //MH - Make unsigned to prevent shift errors
+    unsigned int bitbuf;         /* bits from stream */
     unsigned char left;           /* bits left in next or left to process */
     short *next;        /* next number of codes */
 
@@ -290,7 +372,30 @@ local inline int decode(struct state *s, const struct huffman h)
     left = s->bitcnt;
     code = first = index = 0;
     len = 1;
-    next = h.count + 1;
+    next = h.count + 9;
+
+    //MH - Use the LUT
+    if (left < 8)
+    {
+        bitbuf |= s->in[s->incnt] << left;
+        s->incnt++;
+        left += 8;
+    }
+    short sym = h.lut[bitbuf & 0xFF];
+    if (sym >= 0) //MH - Found symbol straight away
+    {
+        len = (sym >> 9) & 0xF;
+        s->bitbuf = bitbuf >> len;
+        s->bitcnt = (left - len) & 0xF;
+        return sym & 0x01FF;
+    }
+    len = 9; //MH - Didn't find symbol straight away, finish off with the long way
+    //MH - Lookup reverse bit pattern fast
+    code = ReverseByte((unsigned char)(bitbuf & 0xFF));
+    bitbuf >>= 8;
+    index = h.postIndex;
+    first = h.postFirst;
+    left -= 8;
     while (1) {
         while (left--) {
             //MH - x86-specific optimisations
@@ -567,7 +672,10 @@ local int fixed(struct state *s)
     static int virgin = 1;
     static short lencnt[MAXBITS+1], lensym[FIXLCODES];
     static short distcnt[MAXBITS+1], distsym[MAXDCODES];
+    //MH - Define partial reconfigurable LUTs to speed up Huffman decoding
+    static short lenLUT[256], distLUT[256];
     static struct huffman lencode, distcode;
+
 
     /* build fixed huffman tables if first call (may not be thread safe) */
     if (virgin) {
@@ -590,11 +698,13 @@ local int fixed(struct state *s)
         for (; symbol < FIXLCODES; symbol++)
             lengths[symbol] = 8;
         construct(&lencode, lengths, FIXLCODES);
+        ConstructHuffLUT(&lencode, lenLUT); //MH - Make a LUT for this Huffman tree
 
         /* distance table */
         for (symbol = 0; symbol < MAXDCODES; symbol++)
             lengths[symbol] = 5;
         construct(&distcode, lengths, MAXDCODES);
+        ConstructHuffLUT(&distcode, distLUT); //MH - Make a LUT for this Huffman tree
 
         /* do this just once */
         virgin = 0;
@@ -699,6 +809,8 @@ local int dynamic(struct state *s)
     short lengths[MAXCODES];            /* descriptor code lengths */
     short lencnt[MAXBITS+1], lensym[MAXLCODES];         /* lencode memory */
     short distcnt[MAXBITS+1], distsym[MAXDCODES];       /* distcode memory */
+    //MH - Define partial reconfigurable LUTs to speed up Huffman decoding
+    short lenLUT[256], distLUT[256];
     struct huffman lencode, distcode;   /* length and distance codes */
     static const short order[19] =      /* permutation of code length codes */
         {16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
@@ -726,6 +838,7 @@ local int dynamic(struct state *s)
     err = construct(&lencode, lengths, 19);
     if (err != 0)               /* require complete code set here */
         return -4;
+    ConstructHuffLUT(&lencode, lenLUT); //MH - Make a LUT for this Huffman tree
 
     /* read length/literal and distance code length tables */
     index = 0;
@@ -765,11 +878,13 @@ local int dynamic(struct state *s)
     err = construct(&lencode, lengths, nlen);
     if (err && (err < 0 || nlen != lencode.count[0] + lencode.count[1]))
         return -7;      /* incomplete code ok only for single length 1 code */
+    ConstructHuffLUT(&lencode, lenLUT);  //MH - Make a LUT for this Huffman tree
 
     /* build huffman table for distance codes */
     err = construct(&distcode, lengths + nlen, ndist);
     if (err && (err < 0 || ndist != distcode.count[0] + distcode.count[1]))
         return -8;      /* incomplete code ok only for single length 1 code */
+    ConstructHuffLUT(&distcode, distLUT);  //MH - Make a LUT for this Huffman tree
 
     /* decode data until end-of-block code */
     return codes(s, lencode, distcode);
