@@ -23,6 +23,7 @@
  */
 
 #include "pc98_gdc.h"
+#include "ibm_vga.h"
 #include "graphicshw.h"
 
 //Determines whether or not this program is running on a PC-98 by trying to call the printer BIOS
@@ -57,6 +58,33 @@ int FindGraphicsHardware()
     }
 }
 
+void VGAInitBasicGraphics()
+{
+    //Temporarily rely on the video BIOS
+    __asm volatile (
+        "movw $0x0012, %%ax\n\t"
+        "int $0x10"
+    : : : "%ax");
+    //Set palette mapping to sensible values
+    for (int i = 0; i < 16; i++)
+    {
+        VGAAttributeControllerAddress(i);
+        VGAAttributeControllerDataWrite(i);
+        VGAAttributeControllerAddress(i); //????
+    }
+    VGAAttributeControllerAddress(VGA_ATTRIBUTE_ADDRESS_NOLOAD | VGA_ATTRIBUTE_ADDRESS_COLOURSELECT);
+    VGAAttributeControllerDataWrite(0);
+}
+
+void VGAResetBasicGraphics()
+{
+    //Temporarily rely on the video BIOS
+    __asm volatile (
+        "movw $0x0003, %%ax\n\t"
+        "int $0x10"
+    : : : "%ax");
+}
+
 void PC98InitBasicGraphics()
 {
     GDCSetDisplayMode(640, 400, 440);
@@ -85,7 +113,24 @@ int InitGraphicsHardware(int* type, GPIInfo* info)
     switch (*type)
     {
         case GRAPHICSHW_IBM_VGA:
-            return 0; //TODO
+            if (info->palSize > 16)
+            {
+                DOSConsoleWriteString("GPI file has more than 16 colours, but this hardware's method to display that many colours is not yet supported.\r\n$");
+                return 0;
+            }
+            VGAInitBasicGraphics();
+            VGADACWriteAddress(0);
+            for (int i = 0; i < info->palSize; i++)
+            {
+                short r = info->palette[i * 3];
+                r >>= 2;
+                short g = info->palette[i * 3 + 1];
+                g >>= 2;
+                short b = info->palette[i * 3 + 2];
+                b >>= 2;
+                VGADACColourWrite(r, g, b);
+            }
+            return 1;
         case GRAPHICSHW_PC98_16:
             if (info->palSize > 16)
             {
@@ -116,6 +161,7 @@ void ResetGraphicsHardware(int type)
     switch (type)
     {
         case GRAPHICSHW_IBM_VGA:
+            VGAResetBasicGraphics();
             return; //TODO
         case GRAPHICSHW_PC98_16:
             PC98ResetBasicGraphics();

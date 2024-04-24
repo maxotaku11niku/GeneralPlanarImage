@@ -23,6 +23,7 @@
  */
 
 #include "pc98_gdc.h"
+#include "ibm_vga.h"
 #include "graphicshw.h"
 #include "drawing.h"
 #include "x86strops.h"
@@ -70,7 +71,45 @@ void DrawRectPortionPC98(GPIInfo* info, int x, int y)
 
 void DrawRectPortionVGA(GPIInfo* info, int x, int y)
 {
-
+    int startpln = 0;
+    if (info->hasMask) startpln = 1;
+    int pw = info->byteWidth;
+    int h = info->height;
+    int sw = pw;
+    if (sw > 80) sw = 80;
+    int sh = h;
+    if (sh > 480) sh = 480;
+    int bx = x/8;
+    unsigned char wplane = 0x01;
+    if (sw & 0x1)
+    {
+        for (int i = startpln; i < info->numPlanes; i++)
+        {
+            __far unsigned char* pptr = info->planes[i];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = 0; j < sh; j++)
+            {
+                Memcpy16Far(pptr + ((j + y) * pw + bx), (VGA_BASE_1) + j * 80, sw >> 1);
+                (VGA_BASE_1)[j * 80 + (sw >> 1)] = pptr[(j + y) * pw + bx + (sw >> 1)];
+            }
+            wplane <<= 1;
+        }
+    }
+    else
+    {
+        for (int i = startpln; i < info->numPlanes; i++)
+        {
+            __far unsigned char* pptr = info->planes[i];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = 0; j < sh; j++)
+            {
+                Memcpy16Far(pptr + ((j + y) * pw + bx), (VGA_BASE_1) + j * 80, sw >> 1);
+            }
+            wplane <<= 1;
+        }
+    }
 }
 
 void InitDrawing(int type)

@@ -1,4 +1,5 @@
 .kdev4/
+test/
 gpitool/bin/
 gpitool/obj/
 gpitool/genasm/
