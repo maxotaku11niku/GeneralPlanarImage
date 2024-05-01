@@ -110,6 +110,22 @@ int main(int argc, char** argv)
             {
                 break;
             }
+            if ((kc & 0xDF) == 0x57) //Move up the image if W is pressed
+            {
+                UpdateWithScroll(&imageInfo, 0, -16);
+            }
+            if ((kc & 0xDF) == 0x53) //Move down the image if S is pressed
+            {
+                UpdateWithScroll(&imageInfo, 0, 16);
+            }
+            if ((kc & 0xDF) == 0x41) //Move left the image if A is pressed
+            {
+                UpdateWithScroll(&imageInfo, -16, 0);
+            }
+            if ((kc & 0xDF) == 0x44) //Move right the image if D is pressed
+            {
+                UpdateWithScroll(&imageInfo, 16, 0);
+            }
         }
 
         ResetGraphicsHardware(graphicshwType);

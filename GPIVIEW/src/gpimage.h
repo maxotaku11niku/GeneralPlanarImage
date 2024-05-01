@@ -50,6 +50,8 @@ typedef struct
     unsigned short byteWidth;
     unsigned short height;
     unsigned short numTiles;
+    int displayX;
+    int displayY;
     unsigned char flags;
     unsigned char hasMask;
     unsigned char numPlanes;

@@ -392,3 +392,12 @@ inline unsigned char VGACRTCDataRead()
     return data;
 }
 //Supporting defines
+
+//Input raw scroll parameters
+inline void VGAScrollRaw(unsigned short startaddr)
+{
+    VGACRTCAddress(VGA_CRTC_ADDRESS_SADDRLO);
+    VGACRTCDataWrite((unsigned char)(startaddr & 0xFF));
+    VGACRTCAddress(VGA_CRTC_ADDRESS_SADDRHI);
+    VGACRTCDataWrite((unsigned char)((startaddr >> 8) & 0xFF));
+}

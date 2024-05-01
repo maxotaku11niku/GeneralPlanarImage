@@ -28,5 +28,6 @@
 
 //Abstract function pointers
 extern void (*DrawRectPortion)(GPIInfo* info, int x, int y);
+extern void (*UpdateWithScroll)(GPIInfo* info, int dx, int dy);
 
 void InitDrawing(int type);
