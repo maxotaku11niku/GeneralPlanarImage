@@ -22,7 +22,7 @@
  * Whole-program optimisation enabler file (doesn't include assembly files)
  */
 
-#include "src/puff.c"
+#include "src/lz4.c"
 #include "src/pc98_gdc.c"
 #include "src/graphicshw.c"
 #include "src/gpimage.c"

@@ -22,7 +22,7 @@
  * GPI reader and decoder
  */
 
-#include "puff.h"
+#include "lz4.h"
 #include "gpimage.h"
 
 static const char magicNumber[3] = {'G', 'P', 'I'};
@@ -133,17 +133,15 @@ void DecompressGPIFile(GPIInfo* info)
     decompressionBuffer = DOSMemAlloc((planeSize + 15) >> 4);
     for (int i = 0; i < info->numPlanes; i++)
     {
-        volatile unsigned long compressedSize = 0;
+        unsigned long compressedSize = 0;
         unsigned short bytesRead;
-        __far unsigned char* volatile csp = &compressedSize;
-        DOSReadFile(info->handle, 4, csp, &bytesRead);
         DOSReadFile(info->handle, (h+1)/2, (__far unsigned char*)filterBuffer, &bytesRead);
-        DOSReadFile(info->handle, compressedSize, (__far unsigned char*)decompressionBuffer, &bytesRead);
-        unsigned long ps = planeSize;
-        unsigned long cs = compressedSize;
+        DOSReadFile(info->handle, 4, (__far unsigned char*)decompressionBuffer, &bytesRead);
+        compressedSize = *((__far unsigned long*)(&decompressionBuffer[0]));
+        DOSReadFile(info->handle, compressedSize, (__far unsigned char*)(decompressionBuffer + 4), &bytesRead);
         __far unsigned char* pptr = info->planes[i];
-        __far unsigned char* dptr = decompressionBuffer + 2;
-        int res = puff(pptr, &ps, dptr, &cs); //Decompress as inflate
+        __far unsigned char* dptr = decompressionBuffer;
+        unsigned int decSize = LZ4Decompress(pptr, dptr);
 
         //Defilter in-place
         pptr = info->planes[i];

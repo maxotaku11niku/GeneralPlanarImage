@@ -22,9 +22,17 @@
  * Image compressor
  */
 
+#define USING_COMPRESSION_LZ4
+//#define USING_COMPRESSION_DEFLATE
+
 extern "C"
 {
+#ifdef USING_COMPRESSION_DEFLATE
     #include <zlib.h>
+#endif
+#ifdef USING_COMPRESSION_LZ4
+    #include <lz4hc.h>
+#endif
 }
 
 #include <string.h>
@@ -487,9 +495,10 @@ int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
         }
 
         //Copy filter table into the compressed data section
-        memcpy(compressedData + 4, filterTable, (pinfo.planeh+1)/2);
-        unsigned char* cptr = compressedData + 4 + ((pinfo.planeh+1)/2);
+        memcpy(compressedData, filterTable, (pinfo.planeh+1)/2);
+        unsigned char* cptr = compressedData + ((pinfo.planeh+1)/2);
 
+#ifdef USING_COMPRESSION_DEFLATE
         //Compress filtered data using zlib's deflate implementation
         z_stream zStream;
         zStream.zalloc = Z_NULL;
@@ -498,15 +507,19 @@ int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
         deflateInit2(&zStream, 9, Z_DEFLATED, 15, 8, Z_FILTERED);
         zStream.next_in = fPlane;
         zStream.avail_in = pinfo.planeSize;
-        zStream.next_out = cptr;
+        zStream.next_out = cptr + 4;
         zStream.avail_out = pinfo.planeSize * 2 - (4 + ((pinfo.planeh+1)/2));
         zStream.data_type = Z_BINARY;
         deflate(&zStream, Z_FINISH);
         compressedSize = zStream.total_out;
         deflateEnd(&zStream);
+#endif
+#ifdef USING_COMPRESSION_LZ4
+        //Compress filtered data using LZ4
+        compressedSize = LZ4_compress_HC((char*)fPlane, (char*)(cptr + 4), pinfo.planeSize, pinfo.planeSize * 2 - (4 + ((pinfo.planeh+1)/2)), LZ4HC_CLEVEL_MAX);
+#endif
 
-        *((uint32_t*)(&compressedData[0])) = compressedSize;
-
+        *((uint32_t*)(&cptr[0])) = compressedSize;
         printf("Plane %i done, size %i\n", i, compressedSize);
     }
     for (int i = 0; i < 16; i++)
@@ -520,7 +533,7 @@ int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
     for (int i = 0; i < pinfo.numPlanes; i++)
     {
         unsigned char* curPlane = finalPlaneData[i];
-        uint32_t size = *((uint32_t*)(&curPlane[0]));
+        uint32_t size = *((uint32_t*)(&curPlane[((pinfo.planeh+1)/2)]));
         size += 4 + ((pinfo.planeh+1)/2);
         fwrite(curPlane, 1, size, ofile);
         delete[] finalPlaneData[i];

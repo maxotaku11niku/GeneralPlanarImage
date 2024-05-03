@@ -4,7 +4,7 @@ Header:
 0x00    "GPI" (0x47 0x50 0x49)  magic number
 0x03    uint8                   flags
         0000 BEFC
-        C - compression method (0 - Deflate, 1 - reserved)
+        C - compression method (0 - LZ4, 1 - reserved)
         F - use filtering?
         E - endianness of bits in bytes (0 - 01234567, 1 - 76543210, where increasing numbers correspond to moving pixels to the right)
         B - palette entry bits per channel (0 - 4 bits per channel, 1 - 8 bits per channel)
@@ -37,10 +37,6 @@ get line -> filter -> compress -> have we tried all the filters --> commit small
 Note: if filtering is disabled, the corresponding steps are not done, simplifying compression and decompression at the cost of a larger file in most cases
 
 For each plane:
-Compression header:
-Deflate compression:
-0x0000  uint32 compressedSize
-
 If filtering is enabled:
 0x0000  uint4[height*numTiles] filter specification for each line
         bit 3 = 0 -> D[x,y] = filt
@@ -57,6 +53,12 @@ If filtering is enabled:
 The point of filtering is to make the data more compressible by whatever method
 If filtering is not enabled, this is skipped and we go to the main data section, which is now assumed not to be filtered.
 
+Then following that is the compression header
+
+Compression header:
+LZ4 compression:
+0x0000  uint32 compressedSize
+
 Main data section:
 Each byte encodes one bit of the corresponding palette index for 8 pixels in a row: a standard planar format.
 e.g.
@@ -70,8 +72,8 @@ palette indices
 Before:  0000000099999999 (for example)
 After:   0123406089AB9DE9
 
-Deflate compression:
-Uses zlib's implementation (see http://zlib.net/ for more information). I have decided that it would be much better to use a well-tested compression algorithm instead of devising my own.
+LZ4 compression:
+Uses liblz4's implementation (see https://github.com/lz4/lz4 for more information), use LZ4_HC for better ratios. I have decided that it would be much better to use a well-tested compression algorithm instead of devising my own.
 
 Schematic defiltering routine (one plane):
 
