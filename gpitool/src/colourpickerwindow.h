@@ -19,46 +19,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Application root
+ * Colour picking window
  */
 
 #pragma once
 
 #include <glibmm.h>
-#include <gtkmm/application.h>
+#include <gtkmm/window.h>
+#include <gtkmm/checkbutton.h>
+#include <gtkmm/radiobutton.h>
+#include <gtkmm/grid.h>
+#include <gtkmm/colorbutton.h>
 #include <gtkmm/builder.h>
-#include <gtkmm/aboutdialog.h>
-#include "mainwindow.h"
-#include "colourpickerwindow.h"
 #include "imagehandler.h"
-#include "imagecompressor.h"
+#include "mainwindow.h"
 
-class GPITool : public Gtk::Application
+class ColourPickerWindow : public Gtk::Window
 {
 public:
-    static Glib::RefPtr<GPITool> create();
+    ColourPickerWindow(ImageHandler* handler, MainWindow* mainwind);
+    virtual ~ColourPickerWindow();
 
 protected:
-    GPITool();
+    Glib::RefPtr<Gtk::Builder> builderRef;
+    Gtk::CheckButton* planeChecks[9];
+    Gtk::RadioButton* bpc4Radio;
+    Gtk::RadioButton* bpc8Radio;
+    Gtk::Grid* colourGrid;
+    Gtk::ColorButton* colourButtons[256];
+    Gtk::Button* findBestPaletteButton;
 
-    void on_startup() override;
-    void on_activate() override;
+    void ReorganisePaletteGrid(int numColourPlanes);
+    void SetPaletteGridColours();
+    void OnTogglePlane(int planeNum);
+    void OnToggleBitDepth();
+    void OnSetColour(int index);
+    void OnRequestBestPalette();
 
 private:
-    void CreateWindow();
-
-    void OnHideWindow(Gtk::Window* window);
-    void OnMenuFileOpen();
-    void OnMenuFileExport();
-    void OnMenuFileQuit();
-    void OnMenuEditPalette();
-    void OnMenuHelpAbout();
-    void OnAboutDialogResponse(int responseID);
-
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Gtk::AboutDialog aboutDialog;
     MainWindow* mwin;
-    ColourPickerWindow* colPickWin;
     ImageHandler* ihand;
-    ImageCompressor* icomp;
 };

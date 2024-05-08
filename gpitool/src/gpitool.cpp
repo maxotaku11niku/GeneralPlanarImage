@@ -66,6 +66,15 @@ static const char* uiXML =
             "</section>"
         "</submenu>"
         "<submenu>"
+            "<attribute name='label' translatable='yes'>_Edit</attribute>"
+            "<section>"
+                "<item>"
+                    "<attribute name='label' translatable='yes'>_Palette...</attribute>"
+                    "<attribute name='action'>app.edit.palette</attribute>"
+                "</item>"
+            "</section>"
+        "</submenu>"
+        "<submenu>"
             "<attribute name='label' translatable='yes'>_Help</attribute>"
             "<section>"
                 "<item>"
@@ -106,6 +115,7 @@ void GPITool::on_startup()
     add_action("file.open", sigc::mem_fun(*this, &GPITool::OnMenuFileOpen));
     add_action("file.export", sigc::mem_fun(*this, &GPITool::OnMenuFileExport));
     add_action("file.quit", sigc::mem_fun(*this, &GPITool::OnMenuFileQuit));
+    add_action("edit.palette", sigc::mem_fun(*this, &GPITool::OnMenuEditPalette));
     add_action("help.about", sigc::mem_fun(*this, &GPITool::OnMenuHelpAbout));
 
     builderRef = Gtk::Builder::create();
@@ -151,15 +161,8 @@ void GPITool::OnMenuFileOpen()
     {
         case(Gtk::RESPONSE_OK):
             ihand->OpenImageFile((char*)dialog.get_filename().c_str());
-            if (!ihand->GetBestPalette(0.1, 0.0, 0.2))
-            {
-                ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.8, 0.02, 0.03, 0.7, 0.0, 0.0, 0.0, 0.2, true);
-            }
-            else
-            {
-                ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-            }
-            ihand->ShufflePaletteBasedOnOccurrence();
+            if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
+            else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
             mwin->SetNewImageThumbnail(ihand);
             break;
         case(Gtk::RESPONSE_CANCEL):
@@ -185,7 +188,7 @@ void GPITool::OnMenuFileExport()
     {
         case(Gtk::RESPONSE_OK):
             puts("saving");
-            icomp->CompressAndSaveImageDeflate((char*)dialog.get_filename().c_str());
+            icomp->CompressAndSaveImage((char*)dialog.get_filename().c_str());
             break;
         case(Gtk::RESPONSE_CANCEL):
             break;
@@ -201,6 +204,15 @@ void GPITool::OnMenuFileQuit()
         wins[i]->hide();
     }
 }
+
+void GPITool::OnMenuEditPalette()
+{
+    colPickWin = new ColourPickerWindow(ihand, mwin);
+    add_window(*colPickWin);
+    colPickWin->signal_hide().connect(sigc::bind<Gtk::Window*>(sigc::mem_fun(*this, &GPITool::OnHideWindow), colPickWin));
+    colPickWin->show_all();
+}
+
 
 void GPITool::OnMenuHelpAbout()
 {

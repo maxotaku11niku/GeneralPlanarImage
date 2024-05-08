@@ -50,18 +50,7 @@ ImageCompressor::~ImageCompressor()
 
 }
 
-typedef struct
-{
-    int copyFrom;
-    int copyTo;
-    int copyDistance;
-    int copyLength;
-    int tempCopyLength;
-    //bits 0-1 -> escape type (0 -> none, 1 -> byte 1, 2 -> byte 2, 3 -> rejected at the first stage), bit 2 -> still expandable
-    int typeBits;
-} LZMatch;
-
-int ImageCompressor::CompressAndSaveImageDeflate(char* outFileName)
+int ImageCompressor::CompressAndSaveImage(char* outFileName)
 {
     //Header
     unsigned char header[268];

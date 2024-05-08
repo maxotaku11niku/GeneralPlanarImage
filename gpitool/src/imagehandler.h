@@ -27,6 +27,9 @@
 #include <math.h>
 #include <random>
 
+#define PLANEMASK_MASK 0x100
+#define PLANENUM_MASK 8
+
 typedef struct
 {
     unsigned char R;
@@ -214,6 +217,22 @@ inline ColourRGBA8 LinearFloatToSRGB8(ColourRGBA c)
     return outcol;
 }
 
+inline ColourRGBA8 LinearFloatToSRGB4(ColourRGBA c)
+{
+    ColourRGBA fltcol = LinearToSRGB(c);
+    int oR = (int)((fltcol.R * 15.0f) + 0.5f);
+    int oG = (int)((fltcol.G * 15.0f) + 0.5f);
+    int oB = (int)((fltcol.B * 15.0f) + 0.5f);
+    int oA = (int)((fltcol.A * 15.0f) + 0.5f);
+    if (oR > 0xF) oR = 0xF; else if (oR < 0) oR = 0;
+    if (oG > 0xF) oG = 0xF; else if (oG < 0) oG = 0;
+    if (oB > 0xF) oB = 0xF; else if (oB < 0) oB = 0;
+    if (oA > 0xF) oA = 0xF; else if (oA < 0) oA = 0;
+    oR *= 0x11; oG *= 0x11; oB *= 0x11; oA *= 0x11;
+    ColourRGBA8 outcol = { (unsigned char)oR, (unsigned char)oG, (unsigned char)oB, (unsigned char)oA };
+    return outcol;
+}
+
 inline ColourOkLabA ColourAdjust(ColourOkLabA c, float bright, float contrast)
 {
     c.L += bright;
@@ -256,6 +275,7 @@ public:
 
     int OpenImageFile(char* inFileName);
     void CloseImageFile();
+    bool IsPalettePerfect();
     bool GetBestPalette(float uvbias, float bright, float contrast);
     void ShufflePaletteBasedOnOccurrence();
     void DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro);
@@ -264,6 +284,47 @@ public:
 
     inline ImageInfo* GetEncodedImage() { return &encImage; }
     inline ColourRGBA8* GetCurrentPalette() { return palette; }
+    inline int GetPlaneMask() { return planeMask; }
+    inline int GetNumColours() { return numColours; }
+    inline int GetNumColourPlanes() { return numColourPlanes; }
+
+    inline void SetPaletteColour(int index, ColourRGBA8 col)
+    {
+        palette[index] = col;
+        labPalette[index] = SRGBToOkLab(SRGB8ToLinearFloat(col));
+    }
+
+    inline void AddPlane(int planeNum)
+    {
+        if (planeNum < 0 || planeNum > 8) return;
+        int maskBit = 1 << planeNum;
+        if (!(planeMask & maskBit))
+        {
+            planeMask |= maskBit;
+            if (planeNum != PLANENUM_MASK)
+            {
+                numColourPlanes++;
+                numColours = 1 << numColourPlanes;
+            }
+        }
+    }
+
+    inline void RemovePlane(int planeNum)
+    {
+        if (planeNum < 0 || planeNum > 8) return;
+        int maskBit = 1 << planeNum;
+        if (planeMask & maskBit)
+        {
+            planeMask &= ~maskBit;
+            if (planeNum != PLANENUM_MASK)
+            {
+                numColourPlanes--;
+                numColours = 1 << numColourPlanes;
+            }
+        }
+    }
+
+    bool is8BitColour;
 
 private:
     inline unsigned long long RNGUpdate()
@@ -313,4 +374,6 @@ private:
     ColourRGBA8 palette[256];
     ColourOkLabA labPalette[256];
     int numColours;
+    int planeMask;
+    int numColourPlanes;
 };

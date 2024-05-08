@@ -36,22 +36,25 @@ extern "C"
 #define EDD_EXPAND_Y_TOP    19
 #define EDD_EXPAND_Y_BOTTOM 3
 
-ColourRGBA8 defaultPalette[16] = { { 0x11, 0x11, 0x11, 0xFF },
-                                   { 0x77, 0x77, 0x77, 0xFF },
-                                   { 0xBB, 0x33, 0xBB, 0xFF },
-                                   { 0xFF, 0x77, 0xFF, 0xFF },
-                                   { 0x77, 0x11, 0x11, 0xFF },
-                                   { 0xDD, 0x44, 0x44, 0xFF },
-                                   { 0xFF, 0xBB, 0x77, 0xFF },
-                                   { 0xCC, 0xBB, 0x33, 0xFF },
-                                   { 0x22, 0x77, 0x33, 0xFF },
-                                   { 0x55, 0xDD, 0x55, 0xFF },
-                                   { 0x88, 0xFF, 0x55, 0xFF },
-                                   { 0xFF, 0xFF, 0x66, 0xFF },
-                                   { 0x33, 0x33, 0xBB, 0xFF },
-                                   { 0x33, 0xAA, 0xFF, 0xFF },
-                                   { 0x99, 0xFF, 0xFF, 0xFF },
-                                   { 0xFF, 0xFF, 0xFF, 0xFF } };
+const ColourRGBA8 defaultPalette[16] =
+{
+    { 0x11, 0x11, 0x11, 0xFF },
+    { 0x77, 0x77, 0x77, 0xFF },
+    { 0xBB, 0x33, 0xBB, 0xFF },
+    { 0xFF, 0x77, 0xFF, 0xFF },
+    { 0x77, 0x11, 0x11, 0xFF },
+    { 0xDD, 0x44, 0x44, 0xFF },
+    { 0xFF, 0xBB, 0x77, 0xFF },
+    { 0xCC, 0xBB, 0x33, 0xFF },
+    { 0x22, 0x77, 0x33, 0xFF },
+    { 0x55, 0xDD, 0x55, 0xFF },
+    { 0x88, 0xFF, 0x55, 0xFF },
+    { 0xFF, 0xFF, 0x66, 0xFF },
+    { 0x33, 0x33, 0xBB, 0xFF },
+    { 0x33, 0xAA, 0xFF, 0xFF },
+    { 0x99, 0xFF, 0xFF, 0xFF },
+    { 0xFF, 0xFF, 0xFF, 0xFF }
+};
 
 const float bayer2x2[4] = { -0.5f,   0.0f,
                              0.25f, -0.25f };
@@ -166,9 +169,29 @@ ColourRGBA OkLabToSRGB(ColourOkLabA c)
     return outcol;
 }
 
+ColourOkLabA RoundTripLabA4bpc(ColourOkLabA c)
+{
+    ColourRGBA inRGBA = OkLabToSRGB(c);
+    ColourRGBA8 inRGBA4 = LinearFloatToSRGB4(inRGBA);
+    ColourRGBA outRGBA = SRGB8ToLinearFloat(inRGBA4);
+    return SRGBToOkLab(outRGBA);
+}
+
+ColourOkLabA RoundTripLabA8bpc(ColourOkLabA c)
+{
+    ColourRGBA inRGBA = OkLabToSRGB(c);
+    ColourRGBA8 inRGBA8 = LinearFloatToSRGB8(inRGBA);
+    ColourRGBA outRGBA = SRGB8ToLinearFloat(inRGBA8);
+    return SRGBToOkLab(outRGBA);
+}
+
 ImageHandler::ImageHandler()
 {
-
+    numColours = 16;
+    numColourPlanes = 4;
+    planeMask = 0x00F;
+    is8BitColour = false;
+    memset(palette, 0, sizeof(palette));
 }
 
 ImageHandler::~ImageHandler()
@@ -274,7 +297,10 @@ int ImageHandler::OpenImageFile(char* inFileName)
     memcpy(encImage.data, srcImage.data, w * h * sizeof(ColourRGBA8));
 
     numColours = 16;
-    memcpy(palette, defaultPalette, 16 * sizeof(ColourRGBA8));
+    numColourPlanes = 4;
+    planeMask = 0x00F;
+    is8BitColour = false;
+    memcpy(palette, defaultPalette, sizeof(defaultPalette));
     GetLabPaletteFromRGBA8Palette();
 
     return 0;
@@ -285,6 +311,37 @@ void ImageHandler::CloseImageFile()
     delete[] srcImage.data;
     delete[] encImage.data;
 }
+
+bool ImageHandler::IsPalettePerfect()
+{
+    int w = srcImage.width;
+    int h = srcImage.height;
+    ColourRGBA8* pixels = srcImage.data;
+    long long numPixels = w * h;
+
+    //pointer reinterpretations
+    unsigned int* clistui = (unsigned int*)palette;
+    unsigned int* pixui = (unsigned int*)pixels;
+    for (int i = 0; i < numPixels; i++)
+    {
+        unsigned int inCol = pixui[i];
+        bool foundCol = false;
+        for (int j = 0; j < numColours; j++)
+        {
+            if (clistui[j] == inCol)
+            {
+                foundCol = true;
+                break;
+            }
+        }
+        if (!foundCol)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 typedef struct
 {
@@ -357,7 +414,12 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     //Initialise colour array
     for (long long i = 0; i < numPixels; i++)
     {
-        colours[i] = ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixels[i])), bright, contrast);
+        //Without this clamping the k-means clustering would never converge
+        ColourRGBA incol = OkLabToSRGB(ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixels[i])), bright, contrast));
+        if (incol.R > 1.0f) incol.R = 1.0f; else if (incol.R < 0.0f) incol.R = 0.0f;
+        if (incol.G > 1.0f) incol.G = 1.0f; else if (incol.G < 0.0f) incol.G = 0.0f;
+        if (incol.B > 1.0f) incol.B = 1.0f; else if (incol.B < 0.0f) incol.B = 0.0f;
+        colours[i] = SRGBToOkLab(incol);
     }
     //Pick some means (k-means||)
     ColourOkLabA* csamples = new ColourOkLabA[17 * numColours];
@@ -503,7 +565,7 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     delete[] csamples;
 
     //Iterate the means
-    int iterationsLeft = 696969;
+    int iterationsLeft = 100 + numColours;
     while (iterationsLeft > 0)
     {
         //Zero out sums and counts
@@ -565,6 +627,8 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
                 meancol.b = m->sumb/((double)m->numInCluster);
             }
             meancol.A = 1.0f;
+            if (is8BitColour) meancol = RoundTripLabA8bpc(meancol);
+            else meancol = RoundTripLabA4bpc(meancol);
             m->mean = meancol;
             const double dL = (((double)m->mean.L) - ((double)m->lastmean.L)) * ((double)uvbias);
             const double da = ((double)m->mean.a) - ((double)m->lastmean.a);
@@ -577,11 +641,23 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     }
 
     //Confirm colours
-    for (int i = 0; i < numColours; i++)
+    if (is8BitColour)
     {
-        ColourOkLabA incol = means[i].mean;
-        ColourRGBA midcol = OkLabToSRGB(incol);
-        palette[i] = LinearFloatToSRGB8(midcol);
+        for (int i = 0; i < numColours; i++)
+        {
+            ColourOkLabA incol = means[i].mean;
+            ColourRGBA midcol = OkLabToSRGB(incol);
+            palette[i] = LinearFloatToSRGB8(midcol);
+        }
+    }
+    else
+    {
+        for (int i = 0; i < numColours; i++)
+        {
+            ColourOkLabA incol = means[i].mean;
+            ColourRGBA midcol = OkLabToSRGB(incol);
+            palette[i] = LinearFloatToSRGB4(midcol);
+        }
     }
 
     GetLabPaletteFromRGBA8Palette();
@@ -640,9 +716,10 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
     ColourRGBA8 (ImageHandler::*odfunc)(ColourOkLabA, int, int, float, float, float, float, float, float);
     ColourRGBA8 (ImageHandler::*eddfunc)(ColourOkLabA, int, int, int, float, float, float, float, float, ColourOkLabA*, int, float, float);
     int eddMarginX, eddMarginY;
-    int w = encImage.width;
-    int h = encImage.height;
-    ColourRGBA8* pixels = encImage.data;
+    int w = srcImage.width;
+    int h = srcImage.height;
+    ColourRGBA8* pixels = srcImage.data;
+    ColourRGBA8* outpix = encImage.data;
 
     //Select function and set parameters
     switch (ditherMethod)
@@ -655,7 +732,7 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
                     const long long index = i * w + j;
                     ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixels[index]));
                     incol = ColourAdjust(incol, preB, preC);
-                    pixels[index] = GetClosestColourOkLab(incol, postB, postC, cbias);
+                    outpix[index] = GetClosestColourOkLab(incol, postB, postC, cbias);
                 }
             }
             return;
@@ -718,7 +795,7 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
                 const long long index = i * w + j;
                 ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixels[index]));
                 incol = ColourAdjust(incol, preB, preC);
-                pixels[index] = (this->*odfunc)(incol, j, i, ditAmtL, ditAmtS, ditAmtH, postB, postC, cbias);
+                outpix[index] = (this->*odfunc)(incol, j, i, ditAmtL, ditAmtS, ditAmtH, postB, postC, cbias);
             }
         }
     }
@@ -781,7 +858,7 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
         //Copy back
         for (int i = 0; i < h; i++)
         {
-            memcpy(&pixels[i * w], &expandedInput[(i + EDD_EXPAND_Y_TOP) * ew + EDD_EXPAND_X], w * sizeof(ColourRGBA8));
+            memcpy(&outpix[i * w], &expandedInput[(i + EDD_EXPAND_Y_TOP) * ew + EDD_EXPAND_X], w * sizeof(ColourRGBA8));
         }
         free(diffusedError);
         delete[] expandedInput;

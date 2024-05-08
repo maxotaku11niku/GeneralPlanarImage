@@ -32,7 +32,7 @@ public:
     ImageCompressor();
     ~ImageCompressor();
 
-    int CompressAndSaveImageDeflate(char* outFileName);
+    int CompressAndSaveImage(char* outFileName);
     inline void SetImageHandler(ImageHandler* handler) { ihand = handler; }
 
 private:
