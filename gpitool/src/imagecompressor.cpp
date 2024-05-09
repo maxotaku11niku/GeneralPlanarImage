@@ -53,25 +53,26 @@ ImageCompressor::~ImageCompressor()
 int ImageCompressor::CompressAndSaveImage(char* outFileName)
 {
     //Header
-    unsigned char header[268];
+    unsigned char header[780];
     int headerSize = 0x0C;
     header[0x0] = 'G'; header[0x1] = 'P'; header[0x2] = 'I'; //Magic number
-    header[0x3] = 0x00; //Flags
     ImageInfo* iinfo = ihand->GetEncodedImage();
     PlanarInfo pinfo = ihand->GeneratePlanarData();
     ColourRGBA8* pal = ihand->GetCurrentPalette();
+    unsigned char flags = 0x00;
+    if (pinfo.is8BitColour) flags |= 0x08;
+    header[0x3] = flags; //Flags
     *((uint16_t*)(&header[0x4])) = (uint16_t)(iinfo->width - 1);
     *((uint16_t*)(&header[0x6])) = (uint16_t)(iinfo->height - 1);
     *((uint16_t*)(&header[0x8])) = 0x0000; //Number of tiles (fixed to 1 for now)
     *((uint16_t*)(&header[0xA])) = pinfo.planeMask;
     if (pinfo.is8BitColour)
     {
-        header[0x3] |= 0x08;
         for (int i = 0; i < pinfo.numColours; i++)
         {
-            header[i * 3] = pal[i].R;
-            header[i * 3 + 1] = pal[i].G;
-            header[i * 3 + 2] = pal[i].B;
+            header[headerSize] = pal[i].R;
+            header[headerSize + 1] = pal[i].G;
+            header[headerSize + 2] = pal[i].B;
             headerSize += 3;
         }
     }

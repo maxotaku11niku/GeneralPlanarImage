@@ -868,62 +868,20 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
 PlanarInfo ImageHandler::GeneratePlanarData()
 {
     PlanarInfo outinf;
-    outinf.is8BitColour = false;
 
-    if (numColours <= 2)
-    {
-        outinf.numColours = 2;
-        outinf.numPlanes = 1;
-        outinf.planeMask = 0x0001; //temp
-    }
-    else if (numColours <= 4)
-    {
-        outinf.numColours = 4;
-        outinf.numPlanes = 2;
-        outinf.planeMask = 0x0003; //temp
-    }
-    else if (numColours <= 8)
-    {
-        outinf.numColours = 8;
-        outinf.numPlanes = 3;
-        outinf.planeMask = 0x0007; //temp
-    }
-    else if (numColours <= 16)
-    {
-        outinf.numColours = 16;
-        outinf.numPlanes = 4;
-        outinf.planeMask = 0x000F; //temp
-    }
-    else if (numColours <= 32)
-    {
-        outinf.numColours = 32;
-        outinf.numPlanes = 5;
-        outinf.planeMask = 0x001F; //temp
-    }
-    else if (numColours <= 64)
-    {
-        outinf.numColours = 64;
-        outinf.numPlanes = 6;
-        outinf.planeMask = 0x003F; //temp
-    }
-    else if (numColours <= 128)
-    {
-        outinf.numColours = 128;
-        outinf.numPlanes = 7;
-        outinf.planeMask = 0x007F; //temp
-    }
-    else if (numColours <= 256)
-    {
-        outinf.numColours = 256;
-        outinf.numPlanes = 8;
-        outinf.planeMask = 0x00FF; //temp
-    }
-    else
+    if (numColours > 256)
     {
         puts("Too many colours!!");
         outinf.planeData = nullptr;
         return outinf;
     }
+
+    bool transparency = (planeMask & 0x0100) > 0;
+    outinf.is8BitColour = is8BitColour;
+    outinf.numColours = 1 << numColourPlanes;
+    outinf.planeMask = planeMask;
+    outinf.numPlanes = numColourPlanes;
+    if (transparency) outinf.numPlanes++;
 
     //Convert to indexed colour representation
     int w = encImage.width;
@@ -938,7 +896,6 @@ PlanarInfo ImageHandler::GeneratePlanarData()
     uint32_t* img = (uint32_t*)encImage.data;
     uint32_t* pal = (uint32_t*)palette;
     int nc = outinf.numColours;
-    bool transparency = false;
     for (int i = 0; i < imgsize; i++)
     {
         uint32_t pix = img[i];
@@ -954,8 +911,8 @@ PlanarInfo ImageHandler::GeneratePlanarData()
         }
         if (!foundcol)
         {
-            indices[i] = -1;
-            transparency = true;
+            if (transparency) indices[i] = -1;
+            else indices[i] = 0;
         }
     }
     unsigned char** pData = new unsigned char*[outinf.numPlanes];
@@ -967,8 +924,6 @@ PlanarInfo ImageHandler::GeneratePlanarData()
     }
     if (transparency) //Generate mask plane
     {
-        outinf.numPlanes++;
-        outinf.planeMask |= 0x0100;
         splane++;
         unsigned char* curPlane = pData[0];
         for (int i = 0; i < h; i++)

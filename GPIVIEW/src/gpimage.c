@@ -92,7 +92,7 @@ int OpenGPIFile(const char* path, GPIInfo* info)
     info->palSize = 0x0001 << np;
     if (info->hasMask) info->palSize >> 1;
     info->palette = palette;
-    if (info->flags & GPI_BPC == GPI_BPC_8) //8 bits per channel is trivial to read in
+    if ((info->flags & GPI_BPC) == GPI_BPC_8) //8 bits per channel is trivial to read in
     {
         result = DOSReadFile(info->handle, info->palSize * 3, (__far unsigned char*)palette, &bytesRead);
     }
