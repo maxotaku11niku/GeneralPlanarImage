@@ -247,6 +247,7 @@ inline ColourOkLabA ColourAdjust(ColourOkLabA c, float bright, float contrast)
 
 ColourOkLabA SRGBToOkLab(ColourRGBA c);
 ColourRGBA OkLabToSRGB(ColourOkLabA c);
+ColourRGBA8 BlendSRGB8(ColourRGBA8 l, ColourRGBA8 r, float amt);
 
 enum ditherMethods
 {
@@ -324,6 +325,7 @@ public:
         }
     }
 
+    int transparencyThreshold;
     bool is8BitColour;
 
 private:

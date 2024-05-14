@@ -27,6 +27,11 @@
 
 static const char* uiXML =
 "<interface>"
+    "<object class='GtkAdjustment' id='transThres'>"
+        "<property name='upper'>255</property>"
+        "<property name='step-increment'>1</property>"
+        "<property name='page-increment'>10</property>"
+    "</object>"
     "<object class='GtkBox' id='mainView'>"
         "<property name='visible'>True</property>"
         "<property name='can-focus'>False</property>"
@@ -228,12 +233,39 @@ static const char* uiXML =
             "<object class='GtkLabel'>"
                 "<property name='visible'>True</property>"
                 "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Colours:</property>"
+                "<property name='label' translatable='yes'>Transparency threshold:</property>"
             "</object>"
             "<packing>"
                 "<property name='expand'>True</property>"
                 "<property name='fill'>True</property>"
                 "<property name='position'>6</property>"
+            "</packing>"
+        "</child>"
+        "<child>"
+            "<object class='GtkSpinButton' id='transThresSelect'>"
+                "<property name='visible'>True</property>"
+                "<property name='can-focus'>True</property>"
+                "<property name='input-purpose'>number</property>"
+                "<property name='adjustment'>transThres</property>"
+                "<property name='climb-rate'>1</property>"
+                "<property name='numeric'>True</property>"
+            "</object>"
+            "<packing>"
+                "<property name='expand'>True</property>"
+                "<property name='fill'>True</property>"
+                "<property name='position'>7</property>"
+            "</packing>"
+        "</child>"
+        "<child>"
+            "<object class='GtkLabel'>"
+                "<property name='visible'>True</property>"
+                "<property name='can-focus'>False</property>"
+                "<property name='label' translatable='yes'>Colours:</property>"
+            "</object>"
+            "<packing>"
+                "<property name='expand'>True</property>"
+                "<property name='fill'>True</property>"
+                "<property name='position'>8</property>"
             "</packing>"
         "</child>"
         "<child>"
@@ -244,7 +276,7 @@ static const char* uiXML =
             "<packing>"
                 "<property name='expand'>True</property>"
                 "<property name='fill'>True</property>"
-                "<property name='position'>7</property>"
+                "<property name='position'>9</property>"
             "</packing>"
         "</child>"
         "<child>"
@@ -256,7 +288,7 @@ static const char* uiXML =
             "<packing>"
                 "<property name='expand'>True</property>"
                 "<property name='fill'>True</property>"
-                "<property name='position'>8</property>"
+                "<property name='position'>10</property>"
             "</packing>"
         "</child>"
     "</object>"
@@ -273,6 +305,9 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
     builderRef->get_widget<Gtk::Box>("mainView", mainView);
     add(*mainView);
 
+    Glib::RefPtr<Glib::Object> uiobj = builderRef->get_object("transThres");
+    transThreshold = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
+
     builderRef->get_widget<Gtk::CheckButton>("plane0check", planeChecks[0]);
     builderRef->get_widget<Gtk::CheckButton>("plane1check", planeChecks[1]);
     builderRef->get_widget<Gtk::CheckButton>("plane2check", planeChecks[2]);
@@ -285,6 +320,7 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
 
     builderRef->get_widget<Gtk::RadioButton>("4bpcradio", bpc4Radio);
     builderRef->get_widget<Gtk::RadioButton>("8bpcradio", bpc8Radio);
+    builderRef->get_widget<Gtk::SpinButton>("transThresSelect", transThresholdSpin);
     builderRef->get_widget<Gtk::Grid>("colourGrid", colourGrid);
     builderRef->get_widget<Gtk::Button>("findBestPaletteButton", findBestPaletteButton);
 
@@ -302,6 +338,7 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
 
     bpc4Radio->set_active(!ihand->is8BitColour);
     bpc8Radio->set_active(ihand->is8BitColour);
+    transThreshold->set_value(ihand->transparencyThreshold);
 
     for (int i = 0; i < 9; i++)
     {
@@ -309,6 +346,7 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
     }
     bpc4Radio->signal_toggled().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnToggleBitDepth));
     bpc8Radio->signal_toggled().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnToggleBitDepth));
+    transThreshold->signal_value_changed().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnSetTransparencyThreshold));
     findBestPaletteButton->signal_clicked().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnRequestBestPalette));
 
     ColourRGBA8* pal = ihand->GetCurrentPalette();
@@ -459,6 +497,15 @@ void ColourPickerWindow::OnSetColour(int index)
     else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
     mwin->SetNewImageThumbnail(ihand);
 }
+
+void ColourPickerWindow::OnSetTransparencyThreshold()
+{
+    ihand->transparencyThreshold = (unsigned char)transThreshold->get_value();
+    if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
+    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+    mwin->SetNewImageThumbnail(ihand);
+}
+
 
 void ColourPickerWindow::OnRequestBestPalette()
 {

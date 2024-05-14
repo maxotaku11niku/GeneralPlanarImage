@@ -169,6 +169,39 @@ ColourRGBA OkLabToSRGB(ColourOkLabA c)
     return outcol;
 }
 
+ColourRGBA8 BlendSRGB8(ColourRGBA8 l, ColourRGBA8 r, float amt)
+{
+    ColourRGBA8 outcol;
+    //Should be vectorised
+    float lf[4] = { ((float)l.R)/255.0f, ((float)l.G)/255.0f, ((float)l.B)/255.0f, ((float)l.A)/255.0f };
+    float rf[4] = { ((float)r.R)/255.0f, ((float)r.G)/255.0f, ((float)r.B)/255.0f, ((float)r.A)/255.0f };
+    float outf[4];
+    float namt = (1.0f - amt);
+    for (int i = 0; i < 4; i++)
+    {
+        outf[i] = (namt * lf[i]) + (amt * rf[i]);
+    }
+
+    int outR = (int)(outf[0] * 255.0f + 0.5f);
+    if (outR > 0xFF) outR = 0xFF;
+    else if (outR < 0) outR = 0;
+    int outG = (int)(outf[1] * 255.0f + 0.5f);
+    if (outG > 0xFF) outG = 0xFF;
+    else if (outG < 0) outG = 0;
+    int outB = (int)(outf[2] * 255.0f + 0.5f);
+    if (outB > 0xFF) outB = 0xFF;
+    else if (outB < 0) outB = 0;
+    int outA = (int)(outf[3] * 255.0f + 0.5f);
+    if (outA > 0xFF) outA = 0xFF;
+    else if (outA < 0) outA = 0;
+
+    outcol.R = (unsigned char)outR;
+    outcol.G = (unsigned char)outG;
+    outcol.B = (unsigned char)outB;
+    outcol.A = (unsigned char)outA;
+    return outcol;
+}
+
 ColourOkLabA RoundTripLabA4bpc(ColourOkLabA c)
 {
     ColourRGBA inRGBA = OkLabToSRGB(c);
@@ -300,6 +333,7 @@ int ImageHandler::OpenImageFile(char* inFileName)
     numColourPlanes = 4;
     planeMask = 0x00F;
     is8BitColour = false;
+    transparencyThreshold = 0x80;
     memcpy(palette, defaultPalette, sizeof(defaultPalette));
     GetLabPaletteFromRGBA8Palette();
 
@@ -318,6 +352,11 @@ bool ImageHandler::IsPalettePerfect()
     int h = srcImage.height;
     ColourRGBA8* pixels = srcImage.data;
     long long numPixels = w * h;
+    int tThres = transparencyThreshold;
+    if (tThres < 0) tThres = 0;
+    else if (tThres > 0xFF) tThres = 0xFF;
+    unsigned int transT = (unsigned int)tThres;
+    transT <<= 24;
 
     //pointer reinterpretations
     unsigned int* clistui = (unsigned int*)palette;
@@ -326,6 +365,8 @@ bool ImageHandler::IsPalettePerfect()
     {
         unsigned int inCol = pixui[i];
         bool foundCol = false;
+        if (inCol < transT) continue; //Ignore 'transparent' colours
+        inCol |= 0xFF000000; //Force full opacity for comparison
         for (int j = 0; j < numColours; j++)
         {
             if (clistui[j] == inCol)
@@ -359,6 +400,12 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     int h = srcImage.height;
     ColourRGBA8* pixels = srcImage.data;
     long long numPixels = w * h;
+    int tThres = transparencyThreshold;
+    if (tThres < 0) tThres = 0;
+    else if (tThres > 0xFF) tThres = 0xFF;
+    unsigned int transT = (unsigned int)tThres;
+    transT <<= 24;
+    float ftThres = ((float)tThres)/255.0f;
 
     //Determine if there are too many unique colours
     ColourRGBA8 colourList[256];
@@ -371,6 +418,8 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     {
         unsigned int inCol = pixui[i];
         bool newCol = true;
+        if (inCol < transT) continue; //Ignore 'transparent' colours
+        inCol |= 0xFF000000; //Force full opacity for comparison
         for (int j = 0; j < totalColours; j++)
         {
             if (inCol == clistui[j])
@@ -415,11 +464,15 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     for (long long i = 0; i < numPixels; i++)
     {
         //Without this clamping the k-means clustering would never converge
-        ColourRGBA incol = OkLabToSRGB(ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixels[i])), bright, contrast));
+        ColourRGBA8 pixcol = pixels[i];
+        float alpha = ((float)pixcol.A)/255.0f; //Avoid loss of precision in alpha value
+        ColourRGBA incol = OkLabToSRGB(ColourAdjust(SRGBToOkLab(SRGB8ToLinearFloat(pixcol)), bright, contrast));
         if (incol.R > 1.0f) incol.R = 1.0f; else if (incol.R < 0.0f) incol.R = 0.0f;
         if (incol.G > 1.0f) incol.G = 1.0f; else if (incol.G < 0.0f) incol.G = 0.0f;
         if (incol.B > 1.0f) incol.B = 1.0f; else if (incol.B < 0.0f) incol.B = 0.0f;
-        colours[i] = SRGBToOkLab(incol);
+        ColourOkLabA outcol = SRGBToOkLab(incol);
+        outcol.A = alpha;
+        colours[i] = outcol;
     }
     //Pick some means (k-means||)
     ColourOkLabA* csamples = new ColourOkLabA[17 * numColours];
@@ -437,6 +490,11 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         for (long long j = 0; j < numPixels; j++)
         {
             ColourOkLabA col = colours[j];
+            if (col.A < ftThres) //Ignore 'transparent' colours
+            {
+                probs[j] = 0.0;
+                continue;
+            }
             float lowestDistance = 999999999999999999999999.9;
             for (int k = 0; k < totalSamples; k++)
             {
@@ -490,6 +548,7 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
     for (long long i = 0; i < numPixels; i++)
     {
         ColourOkLabA col = colours[i];
+        if (col.A < ftThres) continue; //Ignore 'transparent' colours
         float lowestDistance = 999999999999999999999999.9;
         int chosenColour = 0;
         for (int j = 0; j < totalSamples; j++)
@@ -518,6 +577,11 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         for (int j = 0; j < totalSamples; j++)
         {
             ColourOkLabA col = csamples[j];
+            if (col.A < ftThres) //Ignore 'transparent' colours
+            {
+                probs[j] = 0.0;
+                continue;
+            }
             float lowestDistance = 999999999999999999999999.9;
             for (int k = 0; k < i; k++)
             {
@@ -582,6 +646,7 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         for (long long i = 0; i < numPixels; i++)
         {
             ColourOkLabA col = colours[i];
+            if (col.A < ftThres) continue; //Ignore 'transparent' colours
             float lowestDistance = 999999999999999999999999.9;
             int chosenColour = 0;
             for (int j = 0; j < numColours; j++)
@@ -720,6 +785,16 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
     int h = srcImage.height;
     ColourRGBA8* pixels = srcImage.data;
     ColourRGBA8* outpix = encImage.data;
+    int tThres = transparencyThreshold;
+    if (tThres < 0) tThres = 0;
+    else if (tThres > 0xFF) tThres = 0xFF;
+    unsigned int transT = (unsigned int)tThres;
+    ColourRGBA8 zeroCol;
+    if ((planeMask & 0x100) == 0x100) //Yes mask plane -> fill 'transparent' colours with #00000000
+    {
+        zeroCol.R = 0; zeroCol.G = 0; zeroCol.B = 0; zeroCol.A = 0;
+    }
+    else zeroCol = palette[0]; //No mask plane -> fill 'transparent' colours with colour 0
 
     //Select function and set parameters
     switch (ditherMethod)
@@ -730,7 +805,13 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
                 for (long long j = 0; j < w; j++)
                 {
                     const long long index = i * w + j;
-                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixels[index]));
+                    ColourRGBA8 pixcol = pixels[index];
+                    if (pixcol.A < transT)
+                    {
+                        outpix[index] = zeroCol;
+                        continue;
+                    }
+                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixcol));
                     incol = ColourAdjust(incol, preB, preC);
                     outpix[index] = GetClosestColourOkLab(incol, postB, postC, cbias);
                 }
@@ -793,7 +874,13 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
             for (long long j = 0; j < w; j++)
             {
                 const long long index = i * w + j;
-                ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixels[index]));
+                ColourRGBA8 pixcol = pixels[index];
+                if (pixcol.A < transT)
+                {
+                    outpix[index] = zeroCol;
+                    continue;
+                }
+                ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixcol));
                 incol = ColourAdjust(incol, preB, preC);
                 outpix[index] = (this->*odfunc)(incol, j, i, ditAmtL, ditAmtS, ditAmtH, postB, postC, cbias);
             }
@@ -805,30 +892,169 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
         int eh = h + EDD_EXPAND_Y_TOP + EDD_EXPAND_Y_BOTTOM; //Expand image to ease in error diffusion
         ColourRGBA8* expandedInput = new ColourRGBA8[ew * eh];
         ColourOkLabA* diffusedError = (ColourOkLabA*)calloc(ew * eh, sizeof(ColourOkLabA));
-        for (long long i = EDD_EXPAND_Y_TOP; i < eh - EDD_EXPAND_Y_BOTTOM; i++) //Clamp pixels outside image
+
+        long long firstLine;
+        long long lastLine;
+        for (long long i = 0; i < h; i++) //Find first line with non-transparent colours
         {
-            long long iny = i - EDD_EXPAND_Y_TOP;
-            ColourRGBA8 cl = pixels[iny * w];
-            ColourRGBA8 cr = pixels[(iny+1) * w - 1];
-            memcpy(&expandedInput[i * ew + EDD_EXPAND_X], &pixels[iny * w], w * sizeof(ColourRGBA8));
-            for (long long j = 0; j < EDD_EXPAND_X; j++)
+            bool foundLine = false;
+            for (long long j = 0; j < w; j++)
             {
-                expandedInput[i * ew + j] = cl;
+                const long long index = i * w + j;
+                if (pixels[index].A < transT)
+                {
+                    continue;
+                }
+                else
+                {
+                    foundLine = true;
+                    break;
+                }
             }
-            for (long long j = ew - EDD_EXPAND_X; j < ew; j++)
+            if (foundLine)
             {
-                expandedInput[i * ew + j] = cr;
+                firstLine = i;
+                break;
             }
         }
-        ColourRGBA8* rowptr = &expandedInput[EDD_EXPAND_Y_TOP * ew];
-        for (long long i = 0; i < EDD_EXPAND_Y_TOP; i++)
+        lastLine = firstLine;
+        for (long long i = firstLine + 1; i < h; i++) //Find last line with non-transparent colours
         {
-            memcpy(&expandedInput[i * ew], rowptr, ew * sizeof(ColourRGBA8));
+            bool foundLine = false;
+            for (long long j = 0; j < w; j++)
+            {
+                const long long index = i * w + j;
+                if (pixels[index].A < transT)
+                {
+                    continue;
+                }
+                else
+                {
+                    foundLine = true;
+                    break;
+                }
+            }
+            if (foundLine)
+            {
+                lastLine = i;
+            }
         }
-        rowptr = &expandedInput[(eh - EDD_EXPAND_Y_BOTTOM - 1) * ew];
-        for (long long i = eh - EDD_EXPAND_Y_BOTTOM; i < eh; i++)
+
+        long long topBlendLine = firstLine;
+        long long bottomBlendLine = firstLine;
+        for (long long i = firstLine; i <= lastLine; i++) //Iterate clamping algorithm over all lines with non-transparent colours
         {
-            memcpy(&expandedInput[i * ew], rowptr, ew * sizeof(ColourRGBA8));
+            int lineState = 0;
+            long long outLine = i + EDD_EXPAND_Y_TOP;
+            long long leftPix = 0;
+            for (long long j = 0; j < w; j++)
+            {
+                const long long index = i * w + j;
+                ColourRGBA8 pixcol = pixels[index];
+                if (pixcol.A < transT)
+                {
+                    switch (lineState)
+                    {
+                        case 0: //In left edge, searching for right pixel
+                            break;
+                        case 1: //In non-transparent, searching for left pixel
+                            leftPix = j - 1;
+                            lineState = 2;
+                            break;
+                        case 2: //In transparent, searching for right pixel
+                            break;
+                    }
+                }
+                else
+                {
+                    switch (lineState)
+                    {
+                        case 0: //In left edge, searching for right pixel
+                            pixcol.A = 0x00; //Force full transparency
+                            for (long long k = 0; k < j + EDD_EXPAND_X; k++) //Clamp to left edge
+                            {
+                                expandedInput[outLine * ew + k] = pixcol;
+                            }
+                            lineState = 1;
+                        case 1: //In non-transparent, searching for left pixel
+                            pixcol.A = 0xFF; //Force full opacity
+                            expandedInput[outLine * ew + j + EDD_EXPAND_X] = pixcol;
+                            break;
+                        case 2: //In transparent, searching for right pixel
+                        {
+                            ColourRGBA8 leftCol = pixels[i * w + leftPix];
+                            pixcol.A = 0x00; //Force full transparency
+                            leftCol.A = 0x00; //Force full transparency
+                            for (long long k = leftPix + 1; k < j; k++) //Blend between sides
+                            {
+                                expandedInput[outLine * ew + k + EDD_EXPAND_X] = BlendSRGB8(leftCol, pixcol, (((float)k) - ((float)leftPix))/(((float)j) - ((float)leftPix)));
+                            }
+                        }
+                            pixcol.A = 0xFF; //Force full opacity
+                            expandedInput[outLine * ew + j + EDD_EXPAND_X] = pixcol;
+                            lineState = 1;
+                            break;
+                    }
+                }
+            }
+            switch (lineState)
+            {
+                case 0: //In left edge, searching for right pixel -> all transparent line
+                    continue;
+                case 1: //In non-transparent, searching for left pixel -> clamp to right edge
+                    leftPix = w - 1;
+                case 2: //In transparent, searching for right pixel -> clamp to right edge
+                {
+                    ColourRGBA8 leftCol = pixels[i * w + leftPix];
+                    leftCol.A = 0x00; //Force full transparency
+                    for (long long k = leftPix + 1; k < w; k++)
+                    {
+                        expandedInput[outLine * ew + k + EDD_EXPAND_X] = leftCol;
+                    }
+                }
+                    bottomBlendLine = i;
+                    break;
+            }
+            if (bottomBlendLine - 1 > topBlendLine) //Blend between non-transparent lines
+            {
+                ColourRGBA8* tPtr = &expandedInput[(topBlendLine + EDD_EXPAND_Y_TOP) * ew];
+                ColourRGBA8* bPtr = &expandedInput[(bottomBlendLine + EDD_EXPAND_Y_TOP) * ew];
+                for (long long j = topBlendLine + 1; j < bottomBlendLine; j++)
+                {
+                    float blendFac = (((float)j) - ((float)topBlendLine))/(((float)bottomBlendLine) - ((float)topBlendLine));
+                    for (long long k = 0; k < ew; k++)
+                    {
+                        ColourRGBA8 tCol = tPtr[k];
+                        ColourRGBA8 bCol = bPtr[k];
+                        tCol.A = 0x00; //Force full transparency
+                        bCol.A = 0x00; //Force full transparency
+                        expandedInput[(j + EDD_EXPAND_Y_TOP) * ew + k] = BlendSRGB8(tCol, bCol, blendFac);
+                    }
+                }
+            }
+            topBlendLine = i;
+        }
+
+        //Vertical clamping
+        ColourRGBA8* rowptr = &expandedInput[(firstLine + EDD_EXPAND_Y_TOP) * ew];
+        for (long long i = 0; i < firstLine + EDD_EXPAND_Y_TOP; i++)
+        {
+            for (long long j = 0; j < ew; j++)
+            {
+                ColourRGBA8 rCol = rowptr[j];
+                rCol.A = 0x00; //Force full transparency
+                expandedInput[i * ew + j] = rCol;
+            }
+        }
+        rowptr = &expandedInput[(lastLine + EDD_EXPAND_Y_TOP) * ew];
+        for (long long i = lastLine + EDD_EXPAND_Y_TOP; i < eh; i++)
+        {
+            for (long long j = 0; j < ew; j++)
+            {
+                ColourRGBA8 rCol = rowptr[j];
+                rCol.A = 0x00; //Force full transparency
+                expandedInput[i * ew + j] = rCol;
+            }
         }
 
         for (long long i = 0; i < eh-eddMarginY; i++)
@@ -839,9 +1065,16 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
                 for (long long j = ew-1-eddMarginX; j >= eddMarginX; j--)
                 {
                     const long long index = i * ew + j;
-                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(expandedInput[index]));
+                    ColourRGBA8 pixcol = expandedInput[index];
+                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixcol));
                     incol = ColourAdjust(incol, preB, preC);
-                    expandedInput[index] = (this->*eddfunc)(incol, j, i, ew, ditAmtEL, ditAmtEC, postB, postC, cbias, diffusedError, -1, rngAmtL, rngAmtC);
+                    ColourRGBA8 outcol = (this->*eddfunc)(incol, j, i, ew, ditAmtEL, ditAmtEC, postB, postC, cbias, diffusedError, -1, rngAmtL, rngAmtC);
+                    if (pixcol.A < 0.5f)
+                    {
+                        expandedInput[index] = zeroCol;
+                        continue;
+                    }
+                    else expandedInput[index] = outcol;
                 }
             }
             else
@@ -849,9 +1082,16 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
                 for (long long j = eddMarginX; j < ew-eddMarginX; j++)
                 {
                     const long long index = i * ew + j;
-                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(expandedInput[index]));
+                    ColourRGBA8 pixcol = expandedInput[index];
+                    ColourOkLabA incol = SRGBToOkLab(SRGB8ToLinearFloat(pixcol));
                     incol = ColourAdjust(incol, preB, preC);
-                    expandedInput[index] = (this->*eddfunc)(incol, j, i, ew, ditAmtEL, ditAmtEC, postB, postC, cbias, diffusedError, 1, rngAmtL, rngAmtC);
+                    ColourRGBA8 outcol = (this->*eddfunc)(incol, j, i, ew, ditAmtEL, ditAmtEC, postB, postC, cbias, diffusedError, 1, rngAmtL, rngAmtC);
+                    if (pixcol.A < 0.5f)
+                    {
+                        expandedInput[index] = zeroCol;
+                        continue;
+                    }
+                    else expandedInput[index] = outcol;
                 }
             }
         }
@@ -945,7 +1185,7 @@ PlanarInfo ImageHandler::GeneratePlanarData()
             for (int k = 0; k < w; k++)
             {
                 short ind = indices[j * w + k];
-                if (ind & curMask)
+                if ((ind >= 0) && (ind & curMask))
                 {
                     curPlane[j * pwidth + (k >> 3)] |= (0x01 << (7 - (k & 0x7)));
                 }

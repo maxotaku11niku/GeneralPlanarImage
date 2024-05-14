@@ -90,7 +90,7 @@ int OpenGPIFile(const char* path, GPIInfo* info)
         return -2;
     }
     info->palSize = 0x0001 << np;
-    if (info->hasMask) info->palSize >> 1;
+    if (info->hasMask) info->palSize >>= 1;
     info->palette = palette;
     if ((info->flags & GPI_BPC) == GPI_BPC_8) //8 bits per channel is trivial to read in
     {

@@ -25,9 +25,11 @@
 #pragma once
 
 #include <glibmm.h>
+#include <gtkmm/adjustment.h>
 #include <gtkmm/window.h>
 #include <gtkmm/checkbutton.h>
 #include <gtkmm/radiobutton.h>
+#include <gtkmm/spinbutton.h>
 #include <gtkmm/grid.h>
 #include <gtkmm/colorbutton.h>
 #include <gtkmm/builder.h>
@@ -42,9 +44,11 @@ public:
 
 protected:
     Glib::RefPtr<Gtk::Builder> builderRef;
+    Glib::RefPtr<Gtk::Adjustment> transThreshold;
     Gtk::CheckButton* planeChecks[9];
     Gtk::RadioButton* bpc4Radio;
     Gtk::RadioButton* bpc8Radio;
+    Gtk::SpinButton* transThresholdSpin;
     Gtk::Grid* colourGrid;
     Gtk::ColorButton* colourButtons[256];
     Gtk::Button* findBestPaletteButton;
@@ -53,6 +57,7 @@ protected:
     void SetPaletteGridColours();
     void OnTogglePlane(int planeNum);
     void OnToggleBitDepth();
+    void OnSetTransparencyThreshold();
     void OnSetColour(int index);
     void OnRequestBestPalette();
 
