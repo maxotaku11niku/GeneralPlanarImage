@@ -25,6 +25,7 @@
 extern "C"
 {
     #include <png.h>
+    #include <jpeglib.h>
 }
 #include <string.h>
 #include <stdlib.h>
@@ -232,6 +233,18 @@ ImageHandler::~ImageHandler()
 
 }
 
+#define FORMAT_PNG           0
+#define FORMAT_JPEG          1
+#define FORMAT_UNRECOGNISED -1
+
+int JpegSignatureCheck(unsigned char* inBuf)
+{
+    if (inBuf[0] != 0xFF) return 1;
+    else if (inBuf[1] != 0xD8) return 1;
+    else if (inBuf[2] != 0xFF) return 1;
+    else return 0;
+}
+
 int ImageHandler::OpenImageFile(char* inFileName)
 {
     FILE* file = fopen(inFileName, "rb");
@@ -241,88 +254,143 @@ int ImageHandler::OpenImageFile(char* inFileName)
         return 1;
     }
 
+    int formatType = FORMAT_UNRECOGNISED;
     unsigned char magicCheck[8];
     fread(magicCheck, 1, 8, file);
     //Time to check exactly what kind of image file this is
-    if (png_sig_cmp(magicCheck, 0, 8))
+    if (!png_sig_cmp(magicCheck, 0, 8))
     {
-        puts("File is not a PNG!");
-        return 2; //Not a PNG -> not supported yet
+        formatType = FORMAT_PNG;
+    }
+    else if (!JpegSignatureCheck(magicCheck))
+    {
+        formatType = FORMAT_JPEG;
     }
 
-    //PNG reading
-    png_structp pngPtr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    if (pngPtr == nullptr)
+    int w;
+    int h;
+    switch (formatType)
     {
-        return 1;
-    }
-    png_infop pngInfoPtr = png_create_info_struct(pngPtr);
-    if (pngInfoPtr == nullptr)
-    {
-        png_destroy_read_struct(&pngPtr, nullptr, nullptr);
-        return 1;
-    }
+        case FORMAT_PNG:
+        {
+            //PNG reading
+            png_structp pngPtr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+            if (pngPtr == nullptr)
+            {
+                return 1;
+            }
+            png_infop pngInfoPtr = png_create_info_struct(pngPtr);
+            if (pngInfoPtr == nullptr)
+            {
+                png_destroy_read_struct(&pngPtr, nullptr, nullptr);
+                return 1;
+            }
 
-    png_init_io(pngPtr, file);
-    png_set_sig_bytes(pngPtr, 8);
-    png_read_info(pngPtr, pngInfoPtr);
-    int w = png_get_image_width(pngPtr, pngInfoPtr);
-    int h = png_get_image_height(pngPtr, pngInfoPtr);
-    unsigned char bitdepth = png_get_bit_depth(pngPtr, pngInfoPtr);
-    unsigned char colourtype = png_get_color_type(pngPtr, pngInfoPtr);
-    unsigned char channels = png_get_channels(pngPtr, pngInfoPtr);
-    srcImage.width = w;
-    srcImage.height = h;
-    //Transform to RGBA
-    if (colourtype == PNG_COLOR_TYPE_PALETTE)
-    {
-        png_set_palette_to_rgb(pngPtr);
-    }
-    if (colourtype == PNG_COLOR_TYPE_GRAY && bitdepth < 8)
-    {
-        png_set_expand_gray_1_2_4_to_8(pngPtr);
-    }
-    if (png_get_valid(pngPtr, pngInfoPtr, PNG_INFO_tRNS))
-    {
-        png_set_tRNS_to_alpha(pngPtr);
-    }
-    if (bitdepth == 16)
-    {
-        png_set_strip_16(pngPtr);
-    }
-    if (colourtype == PNG_COLOR_TYPE_RGB || colourtype == PNG_COLOR_TYPE_GRAY || colourtype == PNG_COLOR_TYPE_PALETTE)
-    {
-        png_set_add_alpha(pngPtr, 0xFF, PNG_FILLER_AFTER);
-    }
-    if (colourtype == PNG_COLOR_TYPE_GRAY || colourtype == PNG_COLOR_TYPE_GRAY_ALPHA)
-    {
-        png_set_gray_to_rgb(pngPtr);
-    }
-    double gamma;
-    if (png_get_gAMA(pngPtr, pngInfoPtr, &gamma))
-    {
-        png_set_gamma(pngPtr, 2.2, gamma);
-    }
-    else
-    {
-        png_set_gamma(pngPtr, 2.2, 0.45455);
-    }
-    png_read_update_info(pngPtr, pngInfoPtr);
-    //Allocate and read in PNG
-    srcImage.data = new ColourRGBA8[w * h];
-    unsigned char** rowPtrs = new unsigned char*[h];
-    for (int i = 0; i < h; i++)
-    {
-        rowPtrs[i] = (unsigned char*)(srcImage.data + i * w);
-    }
-    png_read_image(pngPtr, rowPtrs);
+            png_init_io(pngPtr, file);
+            png_set_sig_bytes(pngPtr, 8);
+            png_read_info(pngPtr, pngInfoPtr);
+            w = png_get_image_width(pngPtr, pngInfoPtr);
+            h = png_get_image_height(pngPtr, pngInfoPtr);
+            unsigned char bitdepth = png_get_bit_depth(pngPtr, pngInfoPtr);
+            unsigned char colourtype = png_get_color_type(pngPtr, pngInfoPtr);
+            unsigned char channels = png_get_channels(pngPtr, pngInfoPtr);
+            srcImage.width = w;
+            srcImage.height = h;
+            //Transform to RGBA
+            if (colourtype == PNG_COLOR_TYPE_PALETTE)
+            {
+                png_set_palette_to_rgb(pngPtr);
+            }
+            if (colourtype == PNG_COLOR_TYPE_GRAY && bitdepth < 8)
+            {
+                png_set_expand_gray_1_2_4_to_8(pngPtr);
+            }
+            if (png_get_valid(pngPtr, pngInfoPtr, PNG_INFO_tRNS))
+            {
+                png_set_tRNS_to_alpha(pngPtr);
+            }
+            if (bitdepth == 16)
+            {
+                png_set_strip_16(pngPtr);
+            }
+            if (colourtype == PNG_COLOR_TYPE_RGB || colourtype == PNG_COLOR_TYPE_GRAY || colourtype == PNG_COLOR_TYPE_PALETTE)
+            {
+                png_set_add_alpha(pngPtr, 0xFF, PNG_FILLER_AFTER);
+            }
+            if (colourtype == PNG_COLOR_TYPE_GRAY || colourtype == PNG_COLOR_TYPE_GRAY_ALPHA)
+            {
+                png_set_gray_to_rgb(pngPtr);
+            }
+            double gamma;
+            if (png_get_gAMA(pngPtr, pngInfoPtr, &gamma))
+            {
+                png_set_gamma(pngPtr, 2.2, gamma);
+            }
+            else
+            {
+                png_set_gamma(pngPtr, 2.2, 0.45455);
+            }
+            png_read_update_info(pngPtr, pngInfoPtr);
+            //Allocate and read in PNG
+            srcImage.data = new ColourRGBA8[w * h];
+            unsigned char** rowPtrs = new unsigned char*[h];
+            for (int i = 0; i < h; i++)
+            {
+                rowPtrs[i] = (unsigned char*)(srcImage.data + i * w);
+            }
+            png_read_image(pngPtr, rowPtrs);
 
-    //We're done
-    png_read_end(pngPtr, pngInfoPtr);
-    png_destroy_read_struct(&pngPtr, &pngInfoPtr, nullptr);
+            //We're done
+            png_read_end(pngPtr, pngInfoPtr);
+            png_destroy_read_struct(&pngPtr, &pngInfoPtr, nullptr);
 
-    fclose(file);
-    delete[] rowPtrs;
+            fclose(file);
+            delete[] rowPtrs;
+        }
+            break;
+        case FORMAT_JPEG:
+        {
+            //JPEG reading
+            fseek(file, 0, SEEK_SET);
+            struct jpeg_decompress_struct dinfo;
+            struct jpeg_error_mgr jerr;
+            dinfo.err = jpeg_std_error(&jerr);
+            jpeg_create_decompress(&dinfo);
+            jpeg_stdio_src(&dinfo, file);
+            jpeg_read_header(&dinfo, TRUE);
+            jpeg_start_decompress(&dinfo);
+
+            w = dinfo.output_width;
+            h = dinfo.output_height;
+            srcImage.width = w;
+            srcImage.height = h;
+            srcImage.data = new ColourRGBA8[w * h];
+            JSAMPROW rowBuf = new JSAMPLE[3 * w];
+            while (dinfo.output_scanline < h)
+            {
+                ColourRGBA8* rowPtr = srcImage.data + w * dinfo.output_scanline;
+                jpeg_read_scanlines(&dinfo, &rowBuf, 1);
+                for (int i = 0; i < w; i++)
+                {
+                    ColourRGBA8 outcol;
+                    outcol.R = rowBuf[3 * i];
+                    outcol.G = rowBuf[3 * i + 1];
+                    outcol.B = rowBuf[3 * i + 2];
+                    outcol.A = 0xFF;
+                    rowPtr[i] = outcol;
+                }
+            }
+
+            jpeg_finish_decompress(&dinfo);
+            jpeg_destroy_decompress(&dinfo);
+            fclose(file);
+        }
+            break;
+        default:
+            puts("Unsupported file format!");
+            fclose(file);
+            return 2;
+    }
 
     encImage.width = w;
     encImage.height = h;

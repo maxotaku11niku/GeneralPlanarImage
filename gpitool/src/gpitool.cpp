@@ -153,17 +153,22 @@ void GPITool::OnMenuFileOpen()
     auto typeFilter = Gtk::FileFilter::create();
     typeFilter->set_name("Image files");
     typeFilter->add_pattern("*.png");
+    typeFilter->add_pattern("*.jpg");
+    typeFilter->add_pattern("*.jpeg");
+    typeFilter->add_pattern("*.jfif");
     dialog.add_filter(typeFilter);
 
     int result = dialog.run();
 
-    switch(result)
+    switch (result)
     {
         case(Gtk::RESPONSE_OK):
-            ihand->OpenImageFile((char*)dialog.get_filename().c_str());
-            if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-            else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-            mwin->SetNewImageThumbnail(ihand);
+            if (!ihand->OpenImageFile((char*)dialog.get_filename().c_str()))
+            {
+                if (!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
+                else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+                mwin->SetNewImageThumbnail(ihand);
+            }
             break;
         case(Gtk::RESPONSE_CANCEL):
             break;
@@ -184,7 +189,7 @@ void GPITool::OnMenuFileExport()
 
     int result = dialog.run();
 
-    switch(result)
+    switch (result)
     {
         case(Gtk::RESPONSE_OK):
             puts("saving");
