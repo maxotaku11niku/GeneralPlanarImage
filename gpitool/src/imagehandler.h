@@ -279,6 +279,7 @@ public:
     bool IsPalettePerfect();
     bool GetBestPalette(float uvbias, float bright, float contrast);
     void ShufflePaletteBasedOnOccurrence();
+    void DitherImage();
     void DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro);
     PlanarInfo GeneratePlanarData();
     static void FreePlanarData(PlanarInfo* pinfo);
@@ -327,6 +328,21 @@ public:
 
     int transparencyThreshold;
     bool is8BitColour;
+
+    int ditherMethod;
+    double luminosityDither;
+    double saturationDither;
+    double hueDither;
+    double luminosityDiffusion;
+    double chromaDiffusion;
+    double luminosityRandomisation;
+    double chromaRandomisation;
+    double chromaBias;
+    double preBrightness;
+    double preContrast;
+    double postBrightness;
+    double postContrast;
+    bool boustrophedon;
 
 private:
     inline unsigned long long RNGUpdate()

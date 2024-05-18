@@ -226,6 +226,21 @@ ImageHandler::ImageHandler()
     planeMask = 0x00F;
     is8BitColour = false;
     memset(palette, 0, sizeof(palette));
+
+    ditherMethod = BAYER4X4;
+    luminosityDither = 0.4;
+    saturationDither = 0.1;
+    hueDither = 0.8;
+    luminosityDiffusion = 1.0;
+    chromaDiffusion = 1.0;
+    luminosityRandomisation = 0.0;
+    chromaRandomisation = 0.0;
+    chromaBias = 1.0;
+    preBrightness = 0.0;
+    preContrast = 0.0;
+    postBrightness = 0.0;
+    postContrast = 0.0;
+    boustrophedon = false;
 }
 
 ImageHandler::~ImageHandler()
@@ -841,8 +856,13 @@ void ImageHandler::ShufflePaletteBasedOnOccurrence()
         tempPal[i] = swapColour;
     }
     memcpy(pal, tempPal, sizeof(tempPal));
+    GetLabPaletteFromRGBA8Palette();
 }
 
+void ImageHandler::DitherImage()
+{
+    DitherImage(ditherMethod, luminosityDither, saturationDither, hueDither, luminosityDiffusion, chromaDiffusion, luminosityRandomisation, chromaRandomisation, chromaBias, preBrightness, preContrast, postBrightness, postContrast, boustrophedon);
+}
 
 void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro)
 {

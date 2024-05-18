@@ -30,6 +30,7 @@
 #include <gtkmm/aboutdialog.h>
 #include "mainwindow.h"
 #include "colourpickerwindow.h"
+#include "ditherwindow.h"
 #include "imagehandler.h"
 #include "imagecompressor.h"
 
@@ -52,6 +53,7 @@ private:
     void OnMenuFileExport();
     void OnMenuFileQuit();
     void OnMenuEditPalette();
+    void OnMenuEditDither();
     void OnMenuHelpAbout();
     void OnAboutDialogResponse(int responseID);
 
@@ -59,6 +61,7 @@ private:
     Gtk::AboutDialog aboutDialog;
     MainWindow* mwin;
     ColourPickerWindow* colPickWin;
+    DitherWindow* dithWin;
     ImageHandler* ihand;
     ImageCompressor* icomp;
 };

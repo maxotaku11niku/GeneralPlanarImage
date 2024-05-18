@@ -72,6 +72,10 @@ static const char* uiXML =
                     "<attribute name='label' translatable='yes'>_Palette...</attribute>"
                     "<attribute name='action'>app.edit.palette</attribute>"
                 "</item>"
+                "<item>"
+                    "<attribute name='label' translatable='yes'>_Dithering...</attribute>"
+                    "<attribute name='action'>app.edit.dither</attribute>"
+                "</item>"
             "</section>"
         "</submenu>"
         "<submenu>"
@@ -116,6 +120,7 @@ void GPITool::on_startup()
     add_action("file.export", sigc::mem_fun(*this, &GPITool::OnMenuFileExport));
     add_action("file.quit", sigc::mem_fun(*this, &GPITool::OnMenuFileQuit));
     add_action("edit.palette", sigc::mem_fun(*this, &GPITool::OnMenuEditPalette));
+    add_action("edit.dither", sigc::mem_fun(*this, &GPITool::OnMenuEditDither));
     add_action("help.about", sigc::mem_fun(*this, &GPITool::OnMenuHelpAbout));
 
     builderRef = Gtk::Builder::create();
@@ -165,7 +170,7 @@ void GPITool::OnMenuFileOpen()
         case(Gtk::RESPONSE_OK):
             if (!ihand->OpenImageFile((char*)dialog.get_filename().c_str()))
             {
-                if (!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
+                if (!ihand->IsPalettePerfect()) ihand->DitherImage();
                 else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
                 mwin->SetNewImageThumbnail(ihand);
             }
@@ -218,6 +223,13 @@ void GPITool::OnMenuEditPalette()
     colPickWin->show_all();
 }
 
+void GPITool::OnMenuEditDither()
+{
+    dithWin = new DitherWindow(ihand, mwin);
+    add_window(*dithWin);
+    dithWin->signal_hide().connect(sigc::bind<Gtk::Window*>(sigc::mem_fun(*this, &GPITool::OnHideWindow), dithWin));
+    dithWin->show_all();
+}
 
 void GPITool::OnMenuHelpAbout()
 {

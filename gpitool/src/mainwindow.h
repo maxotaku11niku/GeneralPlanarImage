@@ -40,6 +40,8 @@ public:
 
     void SetNewImageThumbnail(ImageHandler* ihand);
     void UpdateImageThumbnail(ImageHandler* ihand);
+    void UpdateImageThumbnailAfterDither(ImageHandler* ihand);
+    void UpdateImageThumbnailAfterFindColours(ImageHandler* ihand);
 
 protected:
     Glib::RefPtr<Gtk::Builder> builderRef;

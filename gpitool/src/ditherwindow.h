@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Colour picking window
+ * Dither settings window
  */
 
 #pragma once
@@ -27,37 +27,49 @@
 #include <glibmm.h>
 #include <gtkmm/adjustment.h>
 #include <gtkmm/window.h>
+#include <gtkmm/comboboxtext.h>
 #include <gtkmm/checkbutton.h>
-#include <gtkmm/radiobutton.h>
-#include <gtkmm/grid.h>
-#include <gtkmm/colorbutton.h>
 #include <gtkmm/builder.h>
 #include "imagehandler.h"
 #include "mainwindow.h"
 
-class ColourPickerWindow : public Gtk::Window
+class DitherWindow : public Gtk::Window
 {
 public:
-    ColourPickerWindow(ImageHandler* handler, MainWindow* mainwind);
-    virtual ~ColourPickerWindow();
+    DitherWindow(ImageHandler* handler, MainWindow* mainwind);
+    virtual ~DitherWindow();
 
 protected:
     Glib::RefPtr<Gtk::Builder> builderRef;
-    Glib::RefPtr<Gtk::Adjustment> transThreshold;
-    Gtk::CheckButton* planeChecks[9];
-    Gtk::RadioButton* bpc4Radio;
-    Gtk::RadioButton* bpc8Radio;
-    Gtk::Grid* colourGrid;
-    Gtk::ColorButton* colourButtons[256];
-    Gtk::Button* findBestPaletteButton;
+    Glib::RefPtr<Gtk::Adjustment> lumDither;
+    Glib::RefPtr<Gtk::Adjustment> satDither;
+    Glib::RefPtr<Gtk::Adjustment> hueDither;
+    Glib::RefPtr<Gtk::Adjustment> lumDiffusion;
+    Glib::RefPtr<Gtk::Adjustment> chromDiffusion;
+    Glib::RefPtr<Gtk::Adjustment> lumRandom;
+    Glib::RefPtr<Gtk::Adjustment> chromRandom;
+    Glib::RefPtr<Gtk::Adjustment> chromBias;
+    Glib::RefPtr<Gtk::Adjustment> preBright;
+    Glib::RefPtr<Gtk::Adjustment> preContrast;
+    Glib::RefPtr<Gtk::Adjustment> postBright;
+    Glib::RefPtr<Gtk::Adjustment> postContrast;
+    Gtk::ComboBoxText* ditherMethodBox;
+    Gtk::CheckButton* boustroCheck;
 
-    void ReorganisePaletteGrid(int numColourPlanes);
-    void SetPaletteGridColours();
-    void OnTogglePlane(int planeNum);
-    void OnToggleBitDepth();
-    void OnSetTransparencyThreshold();
-    void OnSetColour(int index);
-    void OnRequestBestPalette();
+    void OnSetDitherMethod();
+    void OnSetLuminosityDither();
+    void OnSetSaturationDither();
+    void OnSetHueDither();
+    void OnSetLuminosityDiffusion();
+    void OnSetChromaDiffusion();
+    void OnSetLuminosityRandomisation();
+    void OnSetChromaRandomisation();
+    void OnSetChromaBias();
+    void OnSetPreBrightness();
+    void OnSetPreContrast();
+    void OnSetPostBrightness();
+    void OnSetPostContrast();
+    void OnToggleBoustrophedon();
 
 private:
     MainWindow* mwin;

@@ -242,13 +242,38 @@ static const char* uiXML =
             "</packing>"
         "</child>"
         "<child>"
-            "<object class='GtkSpinButton' id='transThresSelect'>"
+            "<object class='GtkBox'>"
                 "<property name='visible'>True</property>"
-                "<property name='can-focus'>True</property>"
-                "<property name='input-purpose'>number</property>"
-                "<property name='adjustment'>transThres</property>"
-                "<property name='climb-rate'>1</property>"
-                "<property name='numeric'>True</property>"
+                "<property name='can-focus'>False</property>"
+                "<property name='orientation'>horizontal</property>"
+                "<child>"
+                    "<object class='GtkScale'>"
+                        "<property name='visible'>True</property>"
+                        "<property name='can-focus'>True</property>"
+                        "<property name='adjustment'>transThres</property>"
+                        "<property name='draw-value'>False</property>"
+                    "</object>"
+                    "<packing>"
+                        "<property name='expand'>True</property>"
+                        "<property name='fill'>True</property>"
+                        "<property name='position'>0</property>"
+                    "</packing>"
+                "</child>"
+                "<child>"
+                    "<object class='GtkSpinButton'>"
+                        "<property name='visible'>True</property>"
+                        "<property name='can-focus'>True</property>"
+                        "<property name='input-purpose'>number</property>"
+                        "<property name='adjustment'>transThres</property>"
+                        "<property name='climb-rate'>1</property>"
+                        "<property name='numeric'>True</property>"
+                    "</object>"
+                    "<packing>"
+                        "<property name='expand'>False</property>"
+                        "<property name='fill'>True</property>"
+                        "<property name='position'>1</property>"
+                    "</packing>"
+                "</child>"
             "</object>"
             "<packing>"
                 "<property name='expand'>True</property>"
@@ -320,7 +345,6 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
 
     builderRef->get_widget<Gtk::RadioButton>("4bpcradio", bpc4Radio);
     builderRef->get_widget<Gtk::RadioButton>("8bpcradio", bpc8Radio);
-    builderRef->get_widget<Gtk::SpinButton>("transThresSelect", transThresholdSpin);
     builderRef->get_widget<Gtk::Grid>("colourGrid", colourGrid);
     builderRef->get_widget<Gtk::Button>("findBestPaletteButton", findBestPaletteButton);
 
@@ -452,17 +476,13 @@ void ColourPickerWindow::OnTogglePlane(int planeNum)
     if (planeChecks[planeNum]->get_active()) ihand->AddPlane(planeNum);
     else ihand->RemovePlane(planeNum);
     ReorganisePaletteGrid(ihand->GetNumColourPlanes());
-    if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-    mwin->SetNewImageThumbnail(ihand);
+    mwin->UpdateImageThumbnailAfterDither(ihand);
 }
 
 void ColourPickerWindow::OnToggleBitDepth()
 {
     ihand->is8BitColour = bpc8Radio->get_active();
-    if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-    mwin->SetNewImageThumbnail(ihand);
+    mwin->UpdateImageThumbnailAfterDither(ihand);
 }
 
 void ColourPickerWindow::OnSetColour(int index)
@@ -493,31 +513,18 @@ void ColourPickerWindow::OnSetColour(int index)
     ihand->SetPaletteColour(index, outcol);
     Gdk::RGBA newcol(((float)outcol.R)/255.0f, ((float)outcol.G)/255.0f, ((float)outcol.B)/255.0f, ((float)outcol.A)/255.0f);
     colourButtons[index]->set_rgba(newcol);
-    if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-    mwin->SetNewImageThumbnail(ihand);
+    mwin->UpdateImageThumbnailAfterDither(ihand);
 }
 
 void ColourPickerWindow::OnSetTransparencyThreshold()
 {
     ihand->transparencyThreshold = (unsigned char)transThreshold->get_value();
-    if(!ihand->IsPalettePerfect()) ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-    mwin->SetNewImageThumbnail(ihand);
+    mwin->UpdateImageThumbnailAfterDither(ihand);
 }
 
 
 void ColourPickerWindow::OnRequestBestPalette()
 {
-    if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
-    {
-        ihand->DitherImage(STUCKI, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.2, true);
-    }
-    else
-    {
-        ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-    }
-    ihand->ShufflePaletteBasedOnOccurrence();
+    mwin->UpdateImageThumbnailAfterFindColours(ihand);
     SetPaletteGridColours();
-    mwin->SetNewImageThumbnail(ihand);
 }

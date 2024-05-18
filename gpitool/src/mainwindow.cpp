@@ -84,4 +84,23 @@ void MainWindow::UpdateImageThumbnail(ImageHandler* ihand)
     mainImage->set(mainPixbuf);
 }
 
+void MainWindow::UpdateImageThumbnailAfterDither(ImageHandler* ihand)
+{
+    if(!ihand->IsPalettePerfect()) ihand->DitherImage();
+    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+    UpdateImageThumbnail(ihand);
+}
 
+void MainWindow::UpdateImageThumbnailAfterFindColours(ImageHandler* ihand)
+{
+    if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
+    {
+        ihand->DitherImage();
+    }
+    else
+    {
+        ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+    }
+    ihand->ShufflePaletteBasedOnOccurrence();
+    UpdateImageThumbnail(ihand);
+}
