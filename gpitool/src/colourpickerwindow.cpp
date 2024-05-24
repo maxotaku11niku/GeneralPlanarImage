@@ -377,7 +377,8 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
     for (int i = 0; i < 256; i++)
     {
         ColourRGBA8 palcol = pal[i];
-        Gdk::RGBA col(((float)palcol.R)/255.0f, ((float)palcol.G)/255.0f, ((float)palcol.B)/255.0f, ((float)palcol.A)/255.0f);
+        Gdk::RGBA col = Gdk::RGBA();
+        col.set_rgba(((float)palcol.R)/255.0f, ((float)palcol.G)/255.0f, ((float)palcol.B)/255.0f, ((float)palcol.A)/255.0f);
         colourButtons[i] = new Gtk::ColorButton(col);
         Glib::PropertyProxy<bool> cButtonShowEditor = colourButtons[i]->property_show_editor();
         cButtonShowEditor.set_value(true);
@@ -465,7 +466,8 @@ void ColourPickerWindow::SetPaletteGridColours()
     for (int i = 0; i < ihand->GetNumColours(); i++)
     {
         ColourRGBA8 palcol = pal[i];
-        Gdk::RGBA col(((float)palcol.R)/255.0f, ((float)palcol.G)/255.0f, ((float)palcol.B)/255.0f, ((float)palcol.A)/255.0f);
+        Gdk::RGBA col = Gdk::RGBA();
+        col.set_rgba(((float)palcol.R)/255.0f, ((float)palcol.G)/255.0f, ((float)palcol.B)/255.0f, ((float)palcol.A)/255.0f);
         colourButtons[i]->set_rgba(col);
     }
 }
@@ -511,7 +513,8 @@ void ColourPickerWindow::OnSetColour(int index)
     }
     ColourRGBA8 outcol = { (unsigned char)oR, (unsigned char)oG, (unsigned char)oB, 0xFF };
     ihand->SetPaletteColour(index, outcol);
-    Gdk::RGBA newcol(((float)outcol.R)/255.0f, ((float)outcol.G)/255.0f, ((float)outcol.B)/255.0f, ((float)outcol.A)/255.0f);
+    Gdk::RGBA newcol = Gdk::RGBA();
+    newcol.set_rgba(((float)outcol.R)/255.0f, ((float)outcol.G)/255.0f, ((float)outcol.B)/255.0f, ((float)outcol.A)/255.0f);
     colourButtons[index]->set_rgba(newcol);
     mwin->UpdateImageThumbnailAfterDither(ihand);
 }

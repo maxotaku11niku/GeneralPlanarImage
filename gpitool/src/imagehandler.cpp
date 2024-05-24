@@ -1296,9 +1296,15 @@ void ImageHandler::FreePlanarData(PlanarInfo* pinfo)
 
 void ImageHandler::GetLabPaletteFromRGBA8Palette()
 {
+    minL = 1.0f; maxL = 0.0f;
+    maxC = 0.0f;
     for (int i = 0; i < numColours; i++)
     {
-        labPalette[i] = SRGBToOkLab(SRGB8ToLinearFloat(palette[i]));
+        ColourOkLabA labcol = SRGBToOkLab(SRGB8ToLinearFloat(palette[i]));
+        labPalette[i] = labcol;
+        if (labcol.L < minL) minL = labcol.L; if (labcol.L > maxL) maxL = labcol.L;
+        float sat = hypotf(labcol.a, labcol.b);
+        if (sat > maxC) maxC = sat;
     }
 }
 
@@ -1349,10 +1355,23 @@ ColourOkLabA ImageHandler::GetClosestColourOkLabWithError(ColourOkLabA col, Colo
     return outcol;
 }
 
+ColourOkLabA ImageHandler::ClampColourOkLab(ColourOkLabA col)
+{
+    if (col.L < minL) col.L = minL; else if (col.L > maxL) col.L = maxL;
+    float sat = hypotf(col.a, col.b);
+    if (sat > maxC)
+    {
+        col.a *= maxC/sat;
+        col.b *= maxC/sat;
+    }
+    return col;
+}
+
+
 ColourRGBA8 ImageHandler::OrderedDitherBayer2x2(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias)
 {
     col.L += bayer2x2[(y % 2) * 2 + (x % 2)] * amtL;
-    float sat = sqrtf(col.a * col.a + col.b * col.b);
+    float sat = hypotf(col.a, col.b);
     float hue = atan2f(col.b, col.a);
     const float midsat = -amtS * bayer2x2[(y % 2) * 2 + ((x + 1) % 2)];
     sat *= 1.0f + midsat;
@@ -1366,7 +1385,7 @@ ColourRGBA8 ImageHandler::OrderedDitherBayer2x2(ColourOkLabA col, int x, int y, 
 ColourRGBA8 ImageHandler::OrderedDitherBayer4x4(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias)
 {
     col.L += bayer4x4[(y % 4) * 4 + (x % 4)] * amtL;
-    float sat = sqrtf(col.a * col.a + col.b * col.b);
+    float sat = hypotf(col.a, col.b);
     float hue = atan2f(col.b, col.a);
     const float midsat = -amtS * bayer4x4[((y + 3) % 4) * 4 + ((x + 1) % 4)];
     sat *= 1.0f + midsat;
@@ -1380,7 +1399,7 @@ ColourRGBA8 ImageHandler::OrderedDitherBayer4x4(ColourOkLabA col, int x, int y, 
 ColourRGBA8 ImageHandler::OrderedDitherBayer8x8(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias)
 {
     col.L += bayer8x8[(y % 8) * 8 + (x % 8)] * amtL;
-    float sat = sqrtf(col.a * col.a + col.b * col.b);
+    float sat = hypotf(col.a, col.b);
     float hue = atan2f(col.b, col.a);
     const float midsat = -amtS * bayer8x8[((y + 6) % 8) * 8 + ((x + 1) % 8)];
     sat *= 1.0f + midsat;
@@ -1394,7 +1413,7 @@ ColourRGBA8 ImageHandler::OrderedDitherBayer8x8(ColourOkLabA col, int x, int y, 
 ColourRGBA8 ImageHandler::OrderedDitherBayer16x16(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias)
 {
     col.L += bayer16x16[(y % 16) * 16 + (x % 16)] * amtL;
-    float sat = sqrtf(col.a * col.a + col.b * col.b);
+    float sat = hypotf(col.a, col.b);
     float hue = atan2f(col.b, col.a);
     const float midsat = -amtS * bayer16x16[((y + 7) % 16) * 16 + ((x + 4) % 16)];
     sat *= 1.0f + midsat;
@@ -1409,7 +1428,7 @@ ColourRGBA8 ImageHandler::OrderedDitherVoid16x16(ColourOkLabA col, int x, int y,
 {
     int matind = (y % 16) * 16 + (x % 16);
     col.L += void16x16_1[matind] * amtL;
-    float sat = sqrtf(col.a * col.a + col.b * col.b);
+    float sat = hypotf(col.a, col.b);
     float hue = atan2f(col.b, col.a);
     const float midsat = -amtS * void16x16_2[matind];
     sat *= 1.0f + midsat;
@@ -1426,6 +1445,7 @@ ColourRGBA8 ImageHandler::DitherFloydSteinberg(ColourOkLabA col, int x, int y, i
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     diffCol = &diffErr[(x + boustro) +  y * w];
@@ -1451,6 +1471,7 @@ ColourRGBA8 ImageHandler::DitherFloydFalse(ColourOkLabA col, int x, int y, int w
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { 0.375f * amtL, 0.375f * amtC, 0.375f * amtC, 1.0f };
@@ -1473,6 +1494,7 @@ ColourRGBA8 ImageHandler::DitherJJN(ColourOkLabA col, int x, int y, int w, float
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { (7.0f/48.0f) * amtL, (7.0f/48.0f) * amtC, (7.0f/48.0f) * amtC, 1.0f };
@@ -1521,6 +1543,7 @@ ColourRGBA8 ImageHandler::DitherStucki(ColourOkLabA col, int x, int y, int w, fl
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { (8.0f/42.0f) * amtL, (8.0f/42.0f) * amtC, (8.0f/42.0f) * amtC, 1.0f };
@@ -1569,6 +1592,7 @@ ColourRGBA8 ImageHandler::DitherBurkes(ColourOkLabA col, int x, int y, int w, fl
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { (8.0f/32.0f) * amtL, (8.0f/32.0f) * amtC, (8.0f/32.0f) * amtC, 1.0f };
@@ -1604,6 +1628,7 @@ ColourRGBA8 ImageHandler::DitherSierra(ColourOkLabA col, int x, int y, int w, fl
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { (5.0f/32.0f) * amtL, (5.0f/32.0f) * amtC, (5.0f/32.0f) * amtC, 1.0f };
@@ -1648,6 +1673,7 @@ ColourRGBA8 ImageHandler::DitherSierra2Row(ColourOkLabA col, int x, int y, int w
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { (4.0f/16.0f) * amtL, (4.0f/16.0f) * amtC, (4.0f/16.0f) * amtC, 1.0f };
@@ -1685,6 +1711,7 @@ ColourRGBA8 ImageHandler::DitherFilterLite(ColourOkLabA col, int x, int y, int w
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff1 = { 0.5f * amtL, 0.5f * amtC, 0.5f * amtC, 1.0f };
@@ -1707,6 +1734,7 @@ ColourRGBA8 ImageHandler::DitherAtkinson(ColourOkLabA col, int x, int y, int w, 
     ColourOkLabA* diffCol = &diffErr[x +  y * w];
     float inalpha = col.A;
     col = ColourOkLabAAddAccumulate(col, *diffCol);
+    col = ClampColourOkLab(col);
     ColourOkLabA outcol = GetClosestColourOkLabWithError(col, &outerr, bright, contrast, uvbias, rngAmtL, rngAmtC);
 
     const ColourOkLabA coeff = { amtL/6.0f, amtC/6.0f, amtC/6.0f, 1.0f }; //Note: the canonical Atkinson dither only diffuses 3/4 of the error, but we'll normalise this one anyway

@@ -371,6 +371,7 @@ private:
     void GetLabPaletteFromRGBA8Palette();
     ColourRGBA8 GetClosestColourOkLab(ColourOkLabA col, float bright, float contrast, float uvbias);
     ColourOkLabA GetClosestColourOkLabWithError(ColourOkLabA col, ColourOkLabA* error, float bright, float contrast, float uvbias, float rngAmtL, float rngAmtC);
+    ColourOkLabA ClampColourOkLab(ColourOkLabA col);
     ColourRGBA8 OrderedDitherBayer2x2(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias);
     ColourRGBA8 OrderedDitherBayer4x4(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias);
     ColourRGBA8 OrderedDitherBayer8x8(ColourOkLabA col, int x, int y, float amtL, float amtS, float amtH, float bright, float contrast, float uvbias);
@@ -394,4 +395,7 @@ private:
     int numColours;
     int planeMask;
     int numColourPlanes;
+    float maxL;
+    float minL;
+    float maxC;
 };
