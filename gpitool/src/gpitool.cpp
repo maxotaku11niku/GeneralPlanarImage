@@ -168,6 +168,7 @@ void GPITool::OnMenuFileOpen()
     switch (result)
     {
         case(Gtk::RESPONSE_OK):
+            ihand->CloseImageFile();
             if (!ihand->OpenImageFile((char*)dialog.get_filename().c_str()))
             {
                 if (!ihand->IsPalettePerfect()) ihand->DitherImage();

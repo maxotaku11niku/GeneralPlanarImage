@@ -221,6 +221,8 @@ ColourOkLabA RoundTripLabA8bpc(ColourOkLabA c)
 
 ImageHandler::ImageHandler()
 {
+    srcImage.data = nullptr;
+    encImage.data = nullptr;
     numColours = 16;
     numColourPlanes = 4;
     planeMask = 0x00F;
@@ -398,6 +400,7 @@ int ImageHandler::OpenImageFile(char* inFileName)
 
             jpeg_finish_decompress(&dinfo);
             jpeg_destroy_decompress(&dinfo);
+            delete[] rowBuf;
             fclose(file);
         }
             break;
@@ -425,8 +428,8 @@ int ImageHandler::OpenImageFile(char* inFileName)
 
 void ImageHandler::CloseImageFile()
 {
-    delete[] srcImage.data;
-    delete[] encImage.data;
+    if (srcImage.data != nullptr) delete[] srcImage.data;
+    if (encImage.data != nullptr) delete[] encImage.data;
 }
 
 bool ImageHandler::IsPalettePerfect()
@@ -544,6 +547,9 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         m->sumL = 0.0; m->suma = 0.0; m->sumb = 0.0;
     }
     //Initialise colour array
+    float imgMaxL = 0.0f;
+    float imgMinL = 1.0f;
+    float imgMaxC = 0.0f;
     for (long long i = 0; i < numPixels; i++)
     {
         //Without this clamping the k-means clustering would never converge
@@ -556,6 +562,9 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         ColourOkLabA outcol = SRGBToOkLab(incol);
         outcol.A = alpha;
         colours[i] = outcol;
+        if (outcol.L < imgMinL) imgMinL = outcol.L; if (outcol.L > imgMaxL) imgMaxL = outcol.L;
+        float sat = hypotf(outcol.a, outcol.b);
+        if (sat > imgMaxC) imgMaxC = sat;
     }
     //Pick some means (k-means||)
     ColourOkLabA* csamples = new ColourOkLabA[17 * numColours];
@@ -786,6 +795,31 @@ bool ImageHandler::GetBestPalette(float uvbias, float bright, float contrast)
         }
         if (meandiff == 0.0) iterationsLeft = 0; //Break out if convergence has been reached
         iterationsLeft--;
+    }
+
+    //Adjust colours to prevent low dynamic range when the number of colours is low
+    float meanMaxL = 0.0f;
+    float meanMinL = 1.0f;
+    float meanMaxC = 0.0f;
+    for (int i = 0; i < numColours; i++)
+    {
+        ColourOkLabA meancol = means[i].mean;
+        if (meancol.L < meanMinL) meanMinL = meancol.L; if (meancol.L > meanMaxL) meanMaxL = meancol.L;
+        float sat = hypotf(meancol.a, meancol.b);
+        if (sat > meanMaxC) meanMaxC = sat;
+    }
+    float meanLRange = meanMaxL - meanMinL;
+    float imgLRange = imgMaxL - imgMinL;
+    float CRatio = imgMaxC/meanMaxC;
+    for (int i = 0; i < numColours; i++)
+    {
+        ColourOkLabA meancol = means[i].mean;
+        float normL = (meancol.L - meanMinL)/meanLRange;
+        meancol.L = normL * imgLRange + imgMinL;
+        meancol.a *= CRatio;
+        meancol.b *= CRatio;
+        if (is8BitColour) means[i].mean = RoundTripLabA8bpc(meancol);
+        else means[i].mean = RoundTripLabA4bpc(meancol);
     }
 
     //Confirm colours
@@ -1281,6 +1315,7 @@ PlanarInfo ImageHandler::GeneratePlanarData()
         }
     }
 
+    delete[] indices;
     return outinf;
 }
 

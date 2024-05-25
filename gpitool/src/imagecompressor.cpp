@@ -531,6 +531,7 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
     fclose(ofile);
     delete[] fPlane;
     delete[] filterTable;
+    delete[] rowOccurrence;
     ImageHandler::FreePlanarData(&pinfo);
     return 0;
 }
