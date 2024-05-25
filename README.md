@@ -10,7 +10,7 @@ This repository contains **gpitool** which is a GUI program (with a planned term
 
 ## gpitool
 
-gpitool is used to make GPI images from other image files. Currently only PNG is supported for now, but JPEG support will come soon. You can choose the palette freely and choose which planes to store, then the image will be compressed as well as possible. More options to come soon!
+gpitool is used to make GPI images from other image files. Currently only PNG and JPEG are supported for now. Other input image formats may be supported in the future, but don't bet on it. You can choose the palette freely and choose which planes to store, then the image will be compressed as well as possible. More options to come soon!
 
 ## GPIVIEW
 
