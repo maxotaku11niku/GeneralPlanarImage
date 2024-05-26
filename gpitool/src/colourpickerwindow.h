@@ -50,6 +50,8 @@ protected:
     Gtk::Grid* colourGrid;
     Gtk::ColorButton* colourButtons[256];
     Gtk::Button* findBestPaletteButton;
+    Gtk::Button* loadPaletteButton;
+    Gtk::Button* savePaletteButton;
 
     void ReorganisePaletteGrid(int numColourPlanes);
     void SetPaletteGridColours();
@@ -58,6 +60,8 @@ protected:
     void OnSetTransparencyThreshold();
     void OnSetColour(int index);
     void OnRequestBestPalette();
+    void OnLoadPaletteFromFile();
+    void OnSavePaletteToFile();
 
 private:
     MainWindow* mwin;

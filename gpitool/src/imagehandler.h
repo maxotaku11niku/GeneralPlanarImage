@@ -278,6 +278,8 @@ public:
     void CloseImageFile();
     bool IsPalettePerfect();
     bool GetBestPalette(float uvbias, float bright, float contrast);
+    bool LoadPaletteFile(char* inFileName);
+    bool SavePaletteFile(char* outFileName);
     void ShufflePaletteBasedOnOccurrence();
     void DitherImage();
     void DitherImage(int ditherMethod, double ditAmtL, double ditAmtS, double ditAmtH, double ditAmtEL, double ditAmtEC, double rngAmtL, double rngAmtC, double cbias, double preB, double preC, double postB, double postC, bool globBoustro);
@@ -307,6 +309,7 @@ public:
             {
                 numColourPlanes++;
                 numColours = 1 << numColourPlanes;
+                GetLabPaletteFromRGBA8Palette();
             }
         }
     }
@@ -322,6 +325,7 @@ public:
             {
                 numColourPlanes--;
                 numColours = 1 << numColourPlanes;
+                GetLabPaletteFromRGBA8Palette();
             }
         }
     }

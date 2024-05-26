@@ -151,7 +151,7 @@ void GPITool::OnHideWindow(Gtk::Window* window)
 
 void GPITool::OnMenuFileOpen()
 {
-    Gtk::FileChooserDialog dialog("Open File", Gtk::FILE_CHOOSER_ACTION_OPEN);
+    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Open File", Gtk::FILE_CHOOSER_ACTION_OPEN);
     dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
     dialog.add_button("_Open", Gtk::RESPONSE_OK);
 
@@ -183,7 +183,7 @@ void GPITool::OnMenuFileOpen()
 
 void GPITool::OnMenuFileExport()
 {
-    Gtk::FileChooserDialog dialog("Export To", Gtk::FILE_CHOOSER_ACTION_SAVE);
+    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Export To", Gtk::FILE_CHOOSER_ACTION_SAVE);
     dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
     dialog.add_button("_Export", Gtk::RESPONSE_OK);
 

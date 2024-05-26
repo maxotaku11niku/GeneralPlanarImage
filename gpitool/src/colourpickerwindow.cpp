@@ -23,6 +23,7 @@
  */
 
 #include <gtkmm/box.h>
+#include <gtkmm/filechooserdialog.h>
 #include "colourpickerwindow.h"
 
 static const char* uiXML =
@@ -316,6 +317,42 @@ static const char* uiXML =
                 "<property name='position'>10</property>"
             "</packing>"
         "</child>"
+        "<child>"
+            "<object class='GtkBox'>"
+                "<property name='visible'>True</property>"
+                "<property name='can-focus'>False</property>"
+                "<property name='orientation'>horizontal</property>"
+                "<child>"
+                    "<object class='GtkButton' id='loadPaletteButton'>"
+                        "<property name='visible'>True</property>"
+                        "<property name='can-focus'>True</property>"
+                        "<property name='label' translatable='yes'>Load palette from file...</property>"
+                    "</object>"
+                    "<packing>"
+                        "<property name='expand'>True</property>"
+                        "<property name='fill'>True</property>"
+                        "<property name='position'>0</property>"
+                    "</packing>"
+                "</child>"
+                "<child>"
+                    "<object class='GtkButton' id='savePaletteButton'>"
+                        "<property name='visible'>True</property>"
+                        "<property name='can-focus'>True</property>"
+                        "<property name='label' translatable='yes'>Save palette to file...</property>"
+                    "</object>"
+                    "<packing>"
+                        "<property name='expand'>True</property>"
+                        "<property name='fill'>True</property>"
+                        "<property name='position'>1</property>"
+                    "</packing>"
+                "</child>"
+            "</object>"
+            "<packing>"
+                "<property name='expand'>True</property>"
+                "<property name='fill'>True</property>"
+                "<property name='position'>11</property>"
+            "</packing>"
+        "</child>"
     "</object>"
 "</interface>";
 
@@ -347,6 +384,8 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
     builderRef->get_widget<Gtk::RadioButton>("8bpcradio", bpc8Radio);
     builderRef->get_widget<Gtk::Grid>("colourGrid", colourGrid);
     builderRef->get_widget<Gtk::Button>("findBestPaletteButton", findBestPaletteButton);
+    builderRef->get_widget<Gtk::Button>("loadPaletteButton", loadPaletteButton);
+    builderRef->get_widget<Gtk::Button>("savePaletteButton", savePaletteButton);
 
     ihand = handler;
     mwin = mainwind;
@@ -372,6 +411,8 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, MainWindow* mainwi
     bpc8Radio->signal_toggled().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnToggleBitDepth));
     transThreshold->signal_value_changed().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnSetTransparencyThreshold));
     findBestPaletteButton->signal_clicked().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnRequestBestPalette));
+    loadPaletteButton->signal_clicked().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnLoadPaletteFromFile));
+    savePaletteButton->signal_clicked().connect(sigc::mem_fun(*this, &ColourPickerWindow::OnSavePaletteToFile));
 
     ColourRGBA8* pal = ihand->GetCurrentPalette();
     for (int i = 0; i < 256; i++)
@@ -530,4 +571,54 @@ void ColourPickerWindow::OnRequestBestPalette()
 {
     mwin->UpdateImageThumbnailAfterFindColours(ihand);
     SetPaletteGridColours();
+}
+
+void ColourPickerWindow::OnLoadPaletteFromFile()
+{
+    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Open Palette File", Gtk::FILE_CHOOSER_ACTION_OPEN);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("_Open", Gtk::RESPONSE_OK);
+
+    auto typeFilter = Gtk::FileFilter::create();
+    typeFilter->set_name("Text files");
+    typeFilter->add_pattern("*.txt");
+    dialog.add_filter(typeFilter);
+
+    int result = dialog.run();
+
+    switch (result)
+    {
+        case(Gtk::RESPONSE_OK):
+            if (ihand->LoadPaletteFile((char*)dialog.get_filename().c_str()))
+            {
+                mwin->UpdateImageThumbnailAfterDither(ihand);
+                SetPaletteGridColours();
+            }
+            break;
+        case(Gtk::RESPONSE_CANCEL):
+            break;
+    }
+}
+
+void ColourPickerWindow::OnSavePaletteToFile()
+{
+    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Save to Palette File", Gtk::FILE_CHOOSER_ACTION_SAVE);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("_Save", Gtk::RESPONSE_OK);
+
+    auto typeFilter = Gtk::FileFilter::create();
+    typeFilter->set_name("Text files");
+    typeFilter->add_pattern("*.txt");
+    dialog.add_filter(typeFilter);
+
+    int result = dialog.run();
+
+    switch (result)
+    {
+        case(Gtk::RESPONSE_OK):
+            ihand->SavePaletteFile((char*)dialog.get_filename().c_str());
+            break;
+        case(Gtk::RESPONSE_CANCEL):
+            break;
+    }
 }

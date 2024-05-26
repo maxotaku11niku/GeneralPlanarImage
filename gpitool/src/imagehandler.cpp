@@ -469,6 +469,181 @@ bool ImageHandler::IsPalettePerfect()
     return true;
 }
 
+bool ImageHandler::LoadPaletteFile(char* inFileName)
+{
+    FILE* inFile = fopen(inFileName, "rb");
+    if (inFile == nullptr)
+    {
+        puts("Couldn't load palette file!");
+        return false;
+    }
+
+    fseek(inFile, 0, SEEK_END); //Hopefully should set the file pointer to the end of the file
+    const long fileLen = ftell(inFile) + 1; //So we can get the file's length!
+    fseek(inFile, 0, SEEK_SET);
+    char* fileContents = new char[fileLen];
+    fread(fileContents, 1, fileLen, inFile);
+    fclose(inFile);
+    char* filePtr = fileContents;
+    char* endPtr = fileContents + fileLen;
+    char* parseStartPtr = fileContents;
+    int parselen = 0;
+    int coloursParsed = 0;
+    bool scanningHex = false;
+    bool inComment = false;
+    char parseBuffer[7];
+    memset(parseBuffer, 0, sizeof(parseBuffer));
+    while(filePtr < endPtr)
+    {
+        char inchar = *filePtr++;
+        if (inchar == ';') //Comment line
+        {
+            if (scanningHex) //End of hex digits
+            {
+                memcpy(parseBuffer, parseStartPtr, parselen);
+                parseBuffer[parselen] = 0;
+                parseStartPtr = filePtr;
+                unsigned long colNum = strtoul(parseBuffer, nullptr, 16);
+                if (parselen == 6) //8 bits per channel
+                {
+                    palette[coloursParsed].R = (colNum >> 16) & 0xFF;
+                    palette[coloursParsed].G = (colNum >> 8) & 0xFF;
+                    palette[coloursParsed].B = colNum & 0xFF;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+                else if (parselen == 3) //4 bits per channel
+                {
+                    palette[coloursParsed].R = ((colNum >> 8) & 0xF) * 0x11;
+                    palette[coloursParsed].G = ((colNum >> 4) & 0xF) * 0x11;
+                    palette[coloursParsed].B = (colNum & 0xF) * 0x11;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+            }
+            inComment = true;
+        }
+        else if (inchar == '\r' || inchar == '\n') //New line
+        {
+            if (scanningHex) //End of hex digits
+            {
+                memcpy(parseBuffer, parseStartPtr, parselen);
+                parseBuffer[parselen] = 0;
+                parseStartPtr = filePtr;
+                unsigned long colNum = strtoul(parseBuffer, nullptr, 16);
+                if (parselen == 6) //8 bits per channel
+                {
+                    palette[coloursParsed].R = (colNum >> 16) & 0xFF;
+                    palette[coloursParsed].G = (colNum >> 8) & 0xFF;
+                    palette[coloursParsed].B = colNum & 0xFF;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+                else if (parselen == 3) //4 bits per channel
+                {
+                    palette[coloursParsed].R = ((colNum >> 8) & 0xF) * 0x11;
+                    palette[coloursParsed].G = ((colNum >> 4) & 0xF) * 0x11;
+                    palette[coloursParsed].B = (colNum & 0xF) * 0x11;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+            }
+            parseStartPtr = filePtr;
+            parselen = 0;
+            scanningHex = false;
+            inComment = false;
+        }
+        else if (!inComment)
+        {
+            if ((inchar >= 0x30 && inchar <= 0x39) || (inchar >= 0x41 && inchar <= 0x46) || (inchar >= 0x61 && inchar <= 0x66)) //Found hexadecimal digits
+            {
+                if (scanningHex)
+                {
+                    parselen++;
+                    if (parselen >= 6) //Colours need up to 6 hex digits
+                    {
+                        memcpy(parseBuffer, parseStartPtr, 6);
+                        parseStartPtr = filePtr;
+                        unsigned long colNum = strtoul(parseBuffer, nullptr, 16);
+                        palette[coloursParsed].R = (colNum >> 16) & 0xFF;
+                        palette[coloursParsed].G = (colNum >> 8) & 0xFF;
+                        palette[coloursParsed].B = colNum & 0xFF;
+                        coloursParsed++;
+                        if (coloursParsed >= numColours) break;
+                    }
+                }
+                else
+                {
+                    scanningHex = true;
+                    parseStartPtr = filePtr - 1;
+                    parselen = 1;
+                }
+            }
+            else if (scanningHex) //End of hex digits
+            {
+                memcpy(parseBuffer, parseStartPtr, parselen);
+                parseBuffer[parselen] = 0;
+                parseStartPtr = filePtr;
+                unsigned long colNum = strtoul(parseBuffer, nullptr, 16);
+                if (parselen == 6) //8 bits per channel
+                {
+                    palette[coloursParsed].R = (colNum >> 16) & 0xFF;
+                    palette[coloursParsed].G = (colNum >> 8) & 0xFF;
+                    palette[coloursParsed].B = colNum & 0xFF;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+                else if (parselen == 3) //4 bits per channel
+                {
+                    palette[coloursParsed].R = ((colNum >> 8) & 0xF) * 0x11;
+                    palette[coloursParsed].G = ((colNum >> 4) & 0xF) * 0x11;
+                    palette[coloursParsed].B = (colNum & 0xF) * 0x11;
+                    coloursParsed++;
+                    if (coloursParsed >= numColours) break;
+                }
+            }
+        }
+    }
+
+    if (!is8BitColour) //Reduce colours to 4 bits per pixel if necessary
+    {
+        for (int i = 0; i < coloursParsed; i++)
+        {
+            int inR = palette[i].R;
+            int inG = palette[i].G;
+            int inB = palette[i].B;
+            inR = (inR + 0x8)/0x11;
+            inG = (inG + 0x8)/0x11;
+            inB = (inB + 0x8)/0x11;
+            palette[i].R = inR * 0x11;
+            palette[i].G = inG * 0x11;
+            palette[i].B = inB * 0x11;
+        }
+    }
+
+    GetLabPaletteFromRGBA8Palette();
+    delete[] fileContents;
+    return true;
+}
+
+bool ImageHandler::SavePaletteFile(char* outFileName)
+{
+    FILE* outFile = fopen(outFileName, "w");
+    if (outFile == nullptr)
+    {
+        puts("Couldn't save palette file!");
+        return false;
+    }
+
+    for (int i = 0; i < numColours; i++)
+    {
+        fprintf(outFile, "%02X%02X%02X\n", palette[i].R, palette[i].G, palette[i].B);
+    }
+
+    fclose(outFile);
+
+    return true;
+}
 
 typedef struct
 {
