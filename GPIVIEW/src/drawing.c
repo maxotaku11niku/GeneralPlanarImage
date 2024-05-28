@@ -31,13 +31,57 @@
 __far unsigned char* PC98GDCPlanes[4] = { GDC_PLANE0, GDC_PLANE1, GDC_PLANE2, GDC_PLANE3 };
 
 //Abstract function pointers
+void (*ClearScreen)();
+void (*DrawBackgroundPattern)();
 void (*DrawRectPortion)(GPIInfo* info, int x, int y);
 void (*UpdateWithScroll)(GPIInfo* info, int dx, int dy);
+
+void ClearScreenPC98()
+{
+    Memset16Far(0x0000, GDC_PLANE0, 16000);
+    Memset16Far(0x0000, GDC_PLANE1, 16000);
+    Memset16Far(0x0000, GDC_PLANE2, 16000);
+    Memset16Far(0x0000, GDC_PLANE3, 16000);
+}
+
+void ClearScreenVGA()
+{
+    VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+    VGASequencerDataWrite(0x0F);
+    Memset16Far(0x0000, VGA_BASE_1, 19200);
+}
+
+//A little checkerboard pattern, exact colours depend on the palette
+void DrawBackgroundPatternPC98()
+{
+    for (unsigned int i = 0; i < 25; i++)
+    {
+        Memset16Far(0xFF00, (GDC_PLANE0) + 1280 * i, 320);
+        Memset16Far(0x00FF, (GDC_PLANE0) + 1280 * i + 640, 320);
+    }
+}
+
+//A little checkerboard pattern, exact colours depend on the palette
+void DrawBackgroundPatternVGA()
+{
+    VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+    VGASequencerDataWrite(0x01);
+    for (unsigned int i = 0; i < 30; i++)
+    {
+        Memset16Far(0xFF00, (VGA_BASE_1) + 1280 * i, 320);
+        Memset16Far(0x00FF, (VGA_BASE_1) + 1280 * i + 640, 320);
+    }
+}
 
 void DrawRectPortionPC98(GPIInfo* info, int x, int y)
 {
     int startpln = 0;
-    if (info->hasMask) startpln = 1;
+    int rootpln = 0;
+    if (info->hasMask)
+    {
+        startpln = 2;
+        rootpln = 1;
+    }
     int pw = info->byteWidth;
     int h = info->height;
     int sw = pw;
@@ -61,24 +105,61 @@ void DrawRectPortionPC98(GPIInfo* info, int x, int y)
     info->displayY = y;
     if (sw & 0x1)
     {
+        if (info->hasMask) //Our background pattern only occupies one plane and is known in advance, so we can make a number of optimisations
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = 0; j < sh; j++)
+            {
+                unsigned short checkpat;
+                if (((j + y) & 0xF) < 8) checkpat = 0xFF00;
+                else checkpat = 0x00FF;
+                for (int k = 0; k < sw - 1; k += 2)
+                {
+                    unsigned short outshort = checkpat & (*((__far unsigned short*)(mptr + ((j + y) * pw + bx + k))));
+                    outshort |= (*((__far unsigned short*)(pptr + ((j + y) * pw + bx + k))));
+                    *((__far unsigned short*)((PC98GDCPlanes[0]) + j * 80 + k)) = outshort;
+                }
+                unsigned short outshort = checkpat & ((unsigned short)mptr[(j + y) * pw + bx + (sw - 1)]);
+                outshort |= (unsigned short)pptr[(j + y) * pw + bx + (sw - 1)];
+                (PC98GDCPlanes[0])[j * 80 + (sw - 1)] = (unsigned char)outshort;
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
             for (int j = 0; j < sh; j++)
             {
-                Memcpy16Far(pptr + ((j + y) * pw + bx), (PC98GDCPlanes[i-startpln]) + j * 80, sw >> 1);
-                (PC98GDCPlanes[i-startpln])[j * 80 + (sw >> 1)] = pptr[(j + y) * pw + bx + (sw >> 1)];
+                Memcpy16Far(pptr + ((j + y) * pw + bx), (PC98GDCPlanes[i-rootpln]) + j * 80, sw >> 1);
+                (PC98GDCPlanes[i-rootpln])[j * 80 + (sw - 1)] = pptr[(j + y) * pw + bx + (sw - 1)];
             }
         }
     }
     else
     {
+        if (info->hasMask) //Our background pattern only occupies one plane and is known in advance, so we can make a number of optimisations
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = 0; j < sh; j++)
+            {
+                unsigned short checkpat;
+                if (((j + y) & 0xF) < 8) checkpat = 0xFF00;
+                else checkpat = 0x00FF;
+                for (int k = 0; k < sw; k += 2)
+                {
+                    unsigned short outshort = checkpat & (*((__far unsigned short*)(mptr + ((j + y) * pw + bx + k))));
+                    outshort |= (*((__far unsigned short*)(pptr + ((j + y) * pw + bx + k))));
+                    *((__far unsigned short*)((PC98GDCPlanes[0]) + j * 80 + k)) = outshort;
+                }
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
             for (int j = 0; j < sh; j++)
             {
-                Memcpy16Far(pptr + ((j + y) * pw + bx), (PC98GDCPlanes[i-startpln]) + j * 80, sw >> 1);
+                Memcpy16Far(pptr + ((j + y) * pw + bx), (PC98GDCPlanes[i-rootpln]) + j * 80, sw >> 1);
             }
         }
     }
@@ -87,7 +168,7 @@ void DrawRectPortionPC98(GPIInfo* info, int x, int y)
 void DrawRectPortionVGA(GPIInfo* info, int x, int y)
 {
     int startpln = 0;
-    if (info->hasMask) startpln = 1;
+    if (info->hasMask) startpln = 2;
     int pw = info->byteWidth;
     int h = info->height;
     int sw = pw;
@@ -112,6 +193,29 @@ void DrawRectPortionVGA(GPIInfo* info, int x, int y)
     unsigned int wplane = 0x0001;
     if (sw & 0x1)
     {
+        if (info->hasMask) //Our background pattern only occupies one plane and is known in advance, so we can make a number of optimisations
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = 0; j < sh; j++)
+            {
+                unsigned short checkpat;
+                if (((j + y) & 0xF) < 8) checkpat = 0xFF00;
+                else checkpat = 0x00FF;
+                for (int k = 0; k < sw - 1; k += 2)
+                {
+                    unsigned short outshort = checkpat & (*((__far unsigned short*)(mptr + ((j + y) * pw + bx + k))));
+                    outshort |= (*((__far unsigned short*)(pptr + ((j + y) * pw + bx + k))));
+                    *((__far unsigned short*)((VGA_BASE_1) + j * 80 + k)) = outshort;
+                }
+                unsigned short outshort = checkpat & ((unsigned short)mptr[(j + y) * pw + bx + (sw - 1)]);
+                outshort |= (unsigned short)pptr[(j + y) * pw + bx + (sw - 1)];
+                (VGA_BASE_1)[j * 80 + (sw - 1)] = (unsigned char)outshort;
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -127,6 +231,26 @@ void DrawRectPortionVGA(GPIInfo* info, int x, int y)
     }
     else
     {
+        if (info->hasMask) //Our background pattern only occupies one plane and is known in advance, so we can make a number of optimisations
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = 0; j < sh; j++)
+            {
+                unsigned short checkpat;
+                if (((j + y) & 0xF) < 8) checkpat = 0xFF00;
+                else checkpat = 0x00FF;
+                for (int k = 0; k < sw; k += 2)
+                {
+                    unsigned short outshort = checkpat & (*((__far unsigned short*)(mptr + ((j + y) * pw + bx + k))));
+                    outshort |= (*((__far unsigned short*)(pptr + ((j + y) * pw + bx + k))));
+                    *((__far unsigned short*)((VGA_BASE_1) + j * 80 + k)) = outshort;
+                }
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -155,7 +279,7 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
         newX = 0;
         dx = newX - oldX;
     }
-    else if (newX + 625 > info->width)
+    else if ((info->width > 640) && (newX + 625 > info->width))
     {
         newX = (info->width - 625) & 0xFFF0;
         dx = newX - oldX;
@@ -165,7 +289,7 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
         newY = 0;
         dy = newY - oldY;
     }
-    else if (newY + 400 > info->height)
+    else if ((info->height > 400) && (newY + 400 > info->height))
     {
         newY = info->height - 400;
         dy = newY - oldY;
@@ -174,14 +298,47 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
     info->displayY = newY;
 
     int startpln = 0;
-    if (info->hasMask) startpln = 1;
+    int rootpln = 0;
+    if (info->hasMask)
+    {
+        startpln = 2;
+        rootpln = 1;
+    }
     int pw = info->byteWidth;
     int sw = pw;
     if (sw > 80) sw = 80;
+    int margw = 80 - sw;
     int bx = newX/8;
     if (dy > 0)
     {
         int ty = 400 + oldY;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = ty; j < ty + dy; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = 0; k < sw; k++)
+                {
+                    unsigned char outbyte;
+                    if (k & 1) outbyte = checkpat2 & mptr[j * pw + bx + k];
+                    else outbyte = checkpat1 & mptr[j * pw + bx + k];
+                    outbyte |= pptr[j * pw + bx + k];
+                    (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = outbyte;
+                }
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -190,12 +347,51 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
                 if ((((j * 80) + bx) & 0x7FFF) > ((((j * 80) + bx) + sw - 1) & 0x7FFF)) //Account for wraparound
                 {
                     int pbx = 0x8000 - (((j * 80) + bx) & 0x7FFF);
-                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-startpln]) + (((j * 80) + bx) & 0x7FFF), pbx);
-                    MemcpyFar(pptr + (j * pw + bx + pbx), PC98GDCPlanes[i-startpln], sw-pbx);
+                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-rootpln]) + (((j * 80) + bx) & 0x7FFF), pbx);
+                    MemcpyFar(pptr + (j * pw + bx + pbx), PC98GDCPlanes[i-rootpln], sw-pbx);
                 }
                 else
                 {
-                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-startpln]) + (((j * 80) + bx) & 0x7FFF), sw);
+                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-rootpln]) + (((j * 80) + bx) & 0x7FFF), sw);
+                }
+            }
+        }
+        //Fill rest of line if necessary
+        if (sw < 80)
+        {
+            for (int j = ty; j < ty + dy; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = sw; k < 80; k++)
+                {
+                    if (k & 1) (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = checkpat2;
+                    else (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = checkpat1;
+                }
+            }
+            for (int i = 1; i < 4; i++)
+            {
+                for (int j = ty; j < ty + dy; j++)
+                {
+                    if ((((j * 80) + bx + sw) & 0x7FFF) > ((((j * 80) + bx) + 79) & 0x7FFF)) //Account for wraparound
+                    {
+                        int pbx = 0x8000 - (((j * 80) + bx + sw) & 0x7FFF);
+                        MemsetFar(0x00, (PC98GDCPlanes[i]) + (((j * 80) + bx + sw) & 0x7FFF), pbx);
+                        MemsetFar(0x00, PC98GDCPlanes[i], margw-pbx);
+                    }
+                    else
+                    {
+                        MemsetFar(0x00, (PC98GDCPlanes[i]) + (((j * 80) + bx + sw) & 0x7FFF), margw);
+                    }
                 }
             }
         }
@@ -203,6 +399,33 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
     else if (dy < 0)
     {
         int by = oldY;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = by + dy; j < by; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = 0; k < sw; k++)
+                {
+                    unsigned char outbyte;
+                    if (k & 1) outbyte = checkpat2 & mptr[j * pw + bx + k];
+                    else outbyte = checkpat1 & mptr[j * pw + bx + k];
+                    outbyte |= pptr[j * pw + bx + k];
+                    (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = outbyte;
+                }
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -211,12 +434,51 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
                 if ((((j * 80) + bx) & 0x7FFF) > ((((j * 80) + bx) + sw - 1) & 0x7FFF)) //Account for wraparound
                 {
                     int pbx = 0x8000 - (((j * 80) + bx) & 0x7FFF);
-                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-startpln]) + (((j * 80) + bx) & 0x7FFF), pbx);
-                    MemcpyFar(pptr + (j * pw + bx + pbx), PC98GDCPlanes[i-startpln], sw-pbx);
+                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-rootpln]) + (((j * 80) + bx) & 0x7FFF), pbx);
+                    MemcpyFar(pptr + (j * pw + bx + pbx), PC98GDCPlanes[i-rootpln], sw-pbx);
                 }
                 else
                 {
-                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-startpln]) + (((j * 80) + bx) & 0x7FFF), sw);
+                    MemcpyFar(pptr + (j * pw + bx), (PC98GDCPlanes[i-rootpln]) + (((j * 80) + bx) & 0x7FFF), sw);
+                }
+            }
+        }
+        //Fill rest of line if necessary
+        if (sw < 80)
+        {
+            for (int j = by + dy; j < by; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = sw; k < 80; k++)
+                {
+                    if (k & 1) (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = checkpat2;
+                    else (PC98GDCPlanes[0])[((j * 80) + bx + k) & 0x7FFF] = checkpat1;
+                }
+            }
+            for (int i = 1; i < 4; i++)
+            {
+                for (int j = by + dy; j < by; j++)
+                {
+                    if ((((j * 80) + bx + sw) & 0x7FFF) > ((((j * 80) + bx) + 79) & 0x7FFF)) //Account for wraparound
+                    {
+                        int pbx = 0x8000 - (((j * 80) + bx + sw) & 0x7FFF);
+                        MemsetFar(0x00, (PC98GDCPlanes[i]) + (((j * 80) + bx + sw) & 0x7FFF), pbx);
+                        MemsetFar(0x00, PC98GDCPlanes[i], margw-pbx);
+                    }
+                    else
+                    {
+                        MemsetFar(0x00, (PC98GDCPlanes[i]) + (((j * 80) + bx + sw) & 0x7FFF), margw);
+                    }
                 }
             }
         }
@@ -227,6 +489,33 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
     if (dx > 0)
     {
         int rbx = 80 + ((oldX/16) * 2);
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = rbx; j < rbx + ((dx/16) * 2); j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY; k < newY + sh; k++)
+                {
+                    unsigned char outbyte;
+                    if ((k & 0xF) < 8) outbyte = checkpat1 & mptr[k * pw + j];
+                    else outbyte = checkpat2 & mptr[k * pw + j];
+                    outbyte |= pptr[k * pw + j];
+                    PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = outbyte;
+                }
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -234,7 +523,40 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
             {
                 for (int k = newY; k < newY + sh; k++)
                 {
-                    PC98GDCPlanes[i-startpln][((k * 80) + j) & 0x7FFF] = pptr[k * pw + j];
+                    PC98GDCPlanes[i-rootpln][((k * 80) + j) & 0x7FFF] = pptr[k * pw + j];
+                }
+            }
+        }
+        //Fill rest of column if necessary
+        if (sh < 400)
+        {
+            for (int j = rbx; j < rbx + ((dx/16) * 2); j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY + sh; k < newY + 400; k++)
+                {
+                    if ((k & 0xF) < 8) PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = checkpat1;
+                    else PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = checkpat2;
+                }
+            }
+            for (int i = 1; i < 4; i++)
+            {
+                for (int j = rbx; j < rbx + ((dx/16) * 2); j++)
+                {
+                    for (int k = newY + sh; k < newY + 400; k++)
+                    {
+                        PC98GDCPlanes[i][((k * 80) + j) & 0x7FFF] = 0x00;
+                    }
                 }
             }
         }
@@ -242,6 +564,33 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
     else if (dx < 0)
     {
         int lbx = (oldX/16) * 2;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            for (int j = lbx + ((dx/16) * 2); j < lbx; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY; k < newY + sh; k++)
+                {
+                    unsigned char outbyte;
+                    if ((k & 0xF) < 8) outbyte = checkpat1 & mptr[k * pw + j];
+                    else outbyte = checkpat2 & mptr[k * pw + j];
+                    outbyte |= pptr[k * pw + j];
+                    PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = outbyte;
+                }
+            }
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -249,7 +598,40 @@ void UpdateWithScrollPC98(GPIInfo* info, int dx, int dy)
             {
                 for (int k = newY; k < newY + sh; k++)
                 {
-                    PC98GDCPlanes[i-startpln][((k * 80) + j) & 0x7FFF] = pptr[k * pw + j];
+                    PC98GDCPlanes[i-rootpln][((k * 80) + j) & 0x7FFF] = pptr[k * pw + j];
+                }
+            }
+        }
+        //Fill rest of column if necessary
+        if (sh < 400)
+        {
+            for (int j = lbx + ((dx/16) * 2); j < lbx; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY + sh; k < newY + 400; k++)
+                {
+                    if ((k & 0xF) < 8) PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = checkpat1;
+                    else PC98GDCPlanes[0][((k * 80) + j) & 0x7FFF] = checkpat2;
+                }
+            }
+            for (int i = 1; i < 4; i++)
+            {
+                for (int j = lbx + ((dx/16) * 2); j < lbx; j++)
+                {
+                    for (int k = newY + sh; k < newY + 400; k++)
+                    {
+                        PC98GDCPlanes[i][((k * 80) + j) & 0x7FFF] = 0x00;
+                    }
                 }
             }
         }
@@ -273,7 +655,7 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
         newX = 0;
         dx = newX - oldX;
     }
-    else if (newX + 633 > info->width)
+    else if ((info->width > 640) && (newX + 633 > info->width))
     {
         newX = (info->width - 633) & 0xFFF8;
         dx = newX - oldX;
@@ -283,7 +665,7 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
         newY = 0;
         dy = newY - oldY;
     }
-    else if (newY + 480 > info->height)
+    else if ((info->height > 480) && (newY + 480 > info->height))
     {
         newY = info->height - 480;
         dy = newY - oldY;
@@ -292,15 +674,46 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
     info->displayY = newY;
 
     int startpln = 0;
-    if (info->hasMask) startpln = 1;
+    if (info->hasMask) startpln = 2;
     int pw = info->byteWidth;
     int sw = pw;
     if (sw > 80) sw = 80;
+    int margw = 80 - sw;
     int bx = newX/8;
     if (dy > 0)
     {
         int ty = 480 + oldY;
         unsigned int wplane = 0x0001;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = ty; j < ty + dy; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = 0; k < sw; k++)
+                {
+                    unsigned char outbyte;
+                    if (k & 1) outbyte = checkpat2 & mptr[j * pw + bx + k];
+                    else outbyte = checkpat1 & mptr[j * pw + bx + k];
+                    outbyte |= pptr[j * pw + bx + k];
+                    (VGA_BASE_1)[(j * 80) + bx + k] = outbyte;
+                }
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -312,21 +725,117 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
             }
             wplane <<= 1;
         }
+        //Fill rest of line if necessary
+        if (sw < 80)
+        {
+            wplane = 0x0001;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = ty; j < ty + dy; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = sw; k < 80; k++)
+                {
+                    if (k & 1) (VGA_BASE_1)[(j * 80) + bx + k] = checkpat2;
+                    else (VGA_BASE_1)[(j * 80) + bx + k] = checkpat1;
+                }
+            }
+            wplane = 0x000E;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = ty; j < ty + dy; j++) //Rely on overflow wrapping
+            {
+                MemsetFar(0x00, (VGA_BASE_1) + ((j * 80) + bx + sw), margw);
+            }
+        }
     }
     else if (dy < 0)
     {
         int by = oldY;
         unsigned int wplane = 0x0001;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = by + dy; j < by; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = 0; k < sw; k++)
+                {
+                    unsigned char outbyte;
+                    if (k & 1) outbyte = checkpat2 & mptr[j * pw + bx + k];
+                    else outbyte = checkpat1 & mptr[j * pw + bx + k];
+                    outbyte |= pptr[j * pw + bx + k];
+                    (VGA_BASE_1)[(j * 80) + bx + k] = outbyte;
+                }
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
             VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
             VGASequencerDataWrite(wplane);
-            for (int j = by + dy; j < by; j++)
+            for (int j = by + dy; j < by; j++) //Rely on overflow wrapping
             {
                 MemcpyFar(pptr + (j * pw + bx), (VGA_BASE_1) + ((j * 80) + bx), sw);
             }
             wplane <<= 1;
+        }
+        //Fill rest of line if necessary
+        if (sw < 80)
+        {
+            wplane = 0x0001;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = by + dy; j < by; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if ((j & 0xF) < 8)
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                else
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                for (int k = sw; k < 80; k++)
+                {
+                    if (k & 1) (VGA_BASE_1)[(j * 80) + bx + k] = checkpat2;
+                    else (VGA_BASE_1)[(j * 80) + bx + k] = checkpat1;
+                }
+            }
+            wplane = 0x000E;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = by + dy; j < by; j++) //Rely on overflow wrapping
+            {
+                MemsetFar(0x00, (VGA_BASE_1) + ((j * 80) + bx + sw), margw);
+            }
         }
     }
 
@@ -336,6 +845,36 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
     {
         int rbx = 80 + (oldX/8);
         unsigned int wplane = 0x0001;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = rbx; j < rbx + (dx/8); j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY; k < newY + sh; k++)
+                {
+                    unsigned char outbyte;
+                    if ((k & 0xF) < 8) outbyte = checkpat1 & mptr[k * pw + j];
+                    else outbyte = checkpat2 & mptr[k * pw + j];
+                    outbyte |= pptr[k * pw + j];
+                    (VGA_BASE_1)[(k * 80) + j] = outbyte;
+                }
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -350,11 +889,77 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
             }
             wplane <<= 1;
         }
+        //Fill rest of column if necessary
+        if (sh < 480)
+        {
+            wplane = 0x0001;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = rbx; j < rbx + (dx/8); j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY + sh; k < newY + 480; k++)
+                {
+                    if ((k & 0xF) < 8) (VGA_BASE_1)[(k * 80) + j] = checkpat1;
+                    else (VGA_BASE_1)[(k * 80) + j] = checkpat2;
+                }
+            }
+            wplane = 0x000E;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = rbx; j < rbx + (dx/8); j++)
+            {
+                for (int k = newY + sh; k < newY + 480; k++)
+                {
+                    (VGA_BASE_1)[(k * 80) + j] = 0x00;
+                }
+            }
+        }
     }
     else if (dx < 0)
     {
         int lbx = oldX/8;
         unsigned int wplane = 0x0001;
+        if (info->hasMask)
+        {
+            __far unsigned char* mptr = info->planes[0];
+            __far unsigned char* pptr = info->planes[1];
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = lbx + (dx/8); j < lbx; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY; k < newY + sh; k++)
+                {
+                    unsigned char outbyte;
+                    if ((k & 0xF) < 8) outbyte = checkpat1 & mptr[k * pw + j];
+                    else outbyte = checkpat2 & mptr[k * pw + j];
+                    outbyte |= pptr[k * pw + j];
+                    (VGA_BASE_1)[(k * 80) + j] = outbyte;
+                }
+            }
+            wplane <<= 1;
+        }
         for (int i = startpln; i < info->numPlanes; i++)
         {
             __far unsigned char* pptr = info->planes[i];
@@ -369,6 +974,42 @@ void UpdateWithScrollVGA(GPIInfo* info, int dx, int dy)
             }
             wplane <<= 1;
         }
+        //Fill rest of column if necessary
+        if (sh < 480)
+        {
+            wplane = 0x0001;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = lbx + (dx/8); j < lbx; j++)
+            {
+                unsigned char checkpat1, checkpat2;
+                if (j & 1)
+                {
+                    checkpat1 = 0xFF;
+                    checkpat2 = 0x00;
+                }
+                else
+                {
+                    checkpat1 = 0x00;
+                    checkpat2 = 0xFF;
+                }
+                for (int k = newY + sh; k < newY + 480; k++)
+                {
+                    if ((k & 0xF) < 8) (VGA_BASE_1)[(k * 80) + j] = checkpat1;
+                    else (VGA_BASE_1)[(k * 80) + j] = checkpat2;
+                }
+            }
+            wplane = 0x000E;
+            VGASequencerAddress(VGA_SEQUENCER_ADDRESS_MAPMASK);
+            VGASequencerDataWrite(wplane);
+            for (int j = lbx + (dx/8); j < lbx; j++)
+            {
+                for (int k = newY + sh; k < newY + 480; k++)
+                {
+                    (VGA_BASE_1)[(k * 80) + j] = 0x00;
+                }
+            }
+        }
     }
 
     int newaX = newX/8;
@@ -380,10 +1021,14 @@ void InitDrawing(int type)
     switch (type)
     {
         case GRAPHICSHW_PC98_16:
+            ClearScreen = ClearScreenPC98;
+            DrawBackgroundPattern = DrawBackgroundPatternPC98;
             DrawRectPortion = DrawRectPortionPC98;
             UpdateWithScroll = UpdateWithScrollPC98;
             break;
         case GRAPHICSHW_IBM_VGA:
+            ClearScreen = ClearScreenVGA;
+            DrawBackgroundPattern = DrawBackgroundPatternVGA;
             DrawRectPortion = DrawRectPortionVGA;
             UpdateWithScroll = UpdateWithScrollVGA;
             break;

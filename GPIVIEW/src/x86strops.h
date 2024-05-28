@@ -187,6 +187,7 @@ inline void MemsetFar(unsigned char num, __far void* dst, unsigned int count)
 {
     unsigned short dsto = (unsigned short)((unsigned long)dst);
     unsigned short dsts = ((unsigned long)dst) >> 16;
+    unsigned short realNum = num | (num << 8);
     __asm volatile (
         "mov %3, %%es\n\t"
         "testw $0x0001, %1\n\t"
@@ -194,5 +195,5 @@ inline void MemsetFar(unsigned char num, __far void* dst, unsigned int count)
         "stosb\n\t"
         ".aligned%=: shrw $1, %1\n\t"
         "rep stosw"
-    : "+D" (dst), "+c" (count) : "a" (num),  "rm" (dsts) : "%es");
+    : "+D" (dsto), "+c" (count) : "a" (realNum),  "rm" (dsts) : "%es");
 }

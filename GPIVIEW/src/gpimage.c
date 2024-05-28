@@ -266,6 +266,14 @@ void DecompressGPIFile(GPIInfo* info)
             }
         }
     }
+    if (info->hasMask) //NOT the mask to make it slightly faster to use later on
+    {
+        __far unsigned char* pptr = info->planes[0];
+        for (int i = 0; i < dh * pw; i++)
+        {
+            pptr[i] = ~pptr[i];
+        }
+    }
     DOSMemFree(decompressionBuffer);
 }
 

@@ -63,6 +63,8 @@ int main(int argc, char** argv)
     if (InitGraphicsHardware(&graphicshwType, &imageInfo))
     {
         InitDrawing(graphicshwType);
+        ClearScreen();
+        DrawBackgroundPattern();
         int machinetype = graphicshwType & 0xF0;
         if (machinetype == MACHINE_PC98) //Initialise keyboard BIOS on PC-98
         {
@@ -106,7 +108,7 @@ int main(int argc, char** argv)
                     : "=a" (kc) :);
                     break;
             }
-            if (kc == 0x1B) //Stop playback if ESC is pressed
+            if (kc == 0x1B) //Close if ESC is pressed
             {
                 break;
             }
@@ -128,6 +130,7 @@ int main(int argc, char** argv)
             }
         }
 
+        ClearScreen();
         ResetGraphicsHardware(graphicshwType);
         CloseGPIFile(&imageInfo);
         return 0;

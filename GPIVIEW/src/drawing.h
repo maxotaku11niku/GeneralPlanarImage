@@ -27,6 +27,8 @@
 #include "gpimage.h"
 
 //Abstract function pointers
+extern void (*ClearScreen)();
+extern void (*DrawBackgroundPattern)();
 extern void (*DrawRectPortion)(GPIInfo* info, int x, int y);
 extern void (*UpdateWithScroll)(GPIInfo* info, int dx, int dy);
 
