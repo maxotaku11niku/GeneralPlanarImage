@@ -26,11 +26,10 @@
 
 #include "doscalls.h"
 
-#define GPI_HEADER_SIZE 0x0C
+#define GPI_HEADER_SIZE 0x0E
 
 #define GPI_COMPRESSION         0x01
-#define GPI_COMPRESSION_DEFLATE 0x00
-#define GPI_FILTERED            0x02
+#define GPI_COMPRESSION_LZ4     0x00
 #define GPI_ENDIAN              0x04
 #define GPI_ENDIAN_BIG          0x00
 #define GPI_ENDIAN_LITTLE       0x04
@@ -50,6 +49,7 @@ typedef struct
     unsigned short byteWidth;
     unsigned short height;
     unsigned short numTiles;
+    unsigned short filtPlanes;
     int displayX;
     int displayY;
     unsigned char flags;

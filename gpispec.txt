@@ -3,9 +3,8 @@ General Planar Image format specification (conventional extension .gpi)
 Header:
 0x00    "GPI" (0x47 0x50 0x49)  magic number
 0x03    uint8                   flags
-        0000 BEFC
+        0000 BE0C
         C - compression method (0 - LZ4, 1 - reserved)
-        F - use filtering?
         E - endianness of bits in bytes (0 - 01234567, 1 - 76543210, where increasing numbers correspond to moving pixels to the right)
         B - palette entry bits per channel (0 - 4 bits per channel, 1 - 8 bits per channel)
 0x04    uint16                  width - 1
@@ -18,7 +17,12 @@ Header:
         number - has data for given plane?
         M - has data for mask?
         X - reserved, leave as zero
-0x0C    uint4/8[3][2^colour planes stored]  palette
+0x0C    uint16                  filteredPlanes
+        XXXX XXXM  7654 3210
+        number - is filtered for given plane?
+        M - is filtered for mask?
+        X - reserved, leave as zero
+0x0E    uint4/8[3][2^colour planes stored]  palette
         If B = 0, each entry is bitpacked assuming little-endian order, such that entries would be packed like so:
         GGGG RRRR  RRRR BBBB  BBBB GGGG  ...
         If B = 1, no bitpacking is needed and 3 bytes are stored for each palette entry, going in the sequence RGBRGBRGB...
@@ -34,7 +38,7 @@ get line -> filter -> compress -> have we tried all the filters --> commit small
               ^                               | no              yes
               |--------------------------------
 
-Note: if filtering is disabled, the corresponding steps are not done, simplifying compression and decompression at the cost of a larger file in most cases
+Note: filtering may be disabled for planes if it is determined not to be beneficial.
 
 For each plane:
 If filtering is enabled:

@@ -28,7 +28,7 @@
 static const char magicNumber[3] = {'G', 'P', 'I'};
 
 __far unsigned char* decompressionBuffer;
-unsigned char filterBuffer[512];
+unsigned char filterBuffer[1024];
 unsigned char palette[256 * 3];
 
 int OpenGPIFile(const char* path, GPIInfo* info)
@@ -50,11 +50,12 @@ int OpenGPIFile(const char* path, GPIInfo* info)
             return -1; //Oops, no it isn't
         }
     }
-    info->flags              = header[0x03];
-    unsigned short w         = *((unsigned short*)(&header[0x04])) + 1;
-    unsigned short h         = *((unsigned short*)(&header[0x06])) + 1;
-    unsigned short nT        = *((unsigned short*)(&header[0x08])) + 1;
-    unsigned short planeMask = *((unsigned short*)(&header[0x0A]));
+    info->flags                    = header[0x03];
+    unsigned short w               = *((unsigned short*)(&header[0x04])) + 1;
+    unsigned short h               = *((unsigned short*)(&header[0x06])) + 1;
+    unsigned short nT              = *((unsigned short*)(&header[0x08])) + 1;
+    unsigned short planeMask       = *((unsigned short*)(&header[0x0A]));
+    unsigned short planeFilterMask = *((unsigned short*)(&header[0x0C]));
     info->width = w;
     info->height = h;
     info->numTiles = nT;
@@ -66,10 +67,14 @@ int OpenGPIFile(const char* path, GPIInfo* info)
     info->bytesPerPlane = bpp;
 
     int np = 0;
+    unsigned short pfm = 0;
+    unsigned short pfBit = 0x01;
     if (planeMask & 0x0100)
     {
         info->hasMask = 1;
         info->planes[np] = (__far unsigned char*)DOSMemAlloc((unsigned short)((bpp + 15) >> 4));
+        if (planeFilterMask & 0x0100) pfm |= pfBit;
+        pfBit <<= 1;
         np++;
     }
     else info->hasMask = 0;
@@ -79,12 +84,15 @@ int OpenGPIFile(const char* path, GPIInfo* info)
         if (planeMask & pTest)
         {
             info->planes[np] = (__far unsigned char*)DOSMemAlloc((unsigned short)((bpp + 15) >> 4));
+            if (planeFilterMask & pTest) pfm |= pfBit;
+            pfBit <<= 1;
             np++;
         }
         pTest <<= 1;
     }
+    info->filtPlanes = pfm;
     info->numPlanes = np;
-    if (info->numPlanes == 0)
+    if (info->numPlanes == 0 || (info->hasMask && info->numPlanes <= 1))
     {
         DOSConsoleWriteString("GPI file doesn't have any colour planes, GPIVIEW cannot view it.\r\n$");
         return -2;
@@ -124,24 +132,28 @@ int OpenGPIFile(const char* path, GPIInfo* info)
 
 void DecompressGPIFile(GPIInfo* info)
 {
-    unsigned char filt = info->flags & GPI_FILTERED;
     unsigned short h = info->height;
     unsigned short pw = info->byteWidth;
     unsigned short dh = info->decHeight;
+    unsigned short filt = info->filtPlanes;
     unsigned long planeSize = info->bytesPerPlane;
     //Each plane is decompressed the same way
     decompressionBuffer = DOSMemAlloc((planeSize + 15) >> 4);
+    unsigned short filtCheck = 0x01;
     for (int i = 0; i < info->numPlanes; i++)
     {
         unsigned long compressedSize = 0;
         unsigned short bytesRead;
-        DOSReadFile(info->handle, (h+1)/2, (__far unsigned char*)filterBuffer, &bytesRead);
+        unsigned char isFiltered = (unsigned char)((filt & filtCheck) != 0);
+        if (isFiltered) DOSReadFile(info->handle, (h+1)/2, (__far unsigned char*)filterBuffer, &bytesRead);
         DOSReadFile(info->handle, 4, (__far unsigned char*)decompressionBuffer, &bytesRead);
         compressedSize = *((__far unsigned long*)(&decompressionBuffer[0]));
         DOSReadFile(info->handle, compressedSize, (__far unsigned char*)(decompressionBuffer + 4), &bytesRead);
         __far unsigned char* pptr = info->planes[i];
         __far unsigned char* dptr = decompressionBuffer;
         unsigned int decSize = LZ4Decompress(pptr, dptr);
+        filtCheck <<= 1;
+        if (!isFiltered) continue; //Skip defiltering if unnecessary
 
         //Defilter in-place
         pptr = info->planes[i];
