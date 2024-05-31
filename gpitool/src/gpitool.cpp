@@ -312,6 +312,10 @@ static const char* uiXML =
                     "<attribute name='label' translatable='yes'>_Dithering...</attribute>"
                     "<attribute name='action'>app.edit.dither</attribute>"
                 "</item>"
+                "<item>"
+                    "<attribute name='label' translatable='yes'>_Tiling...</attribute>"
+                    "<attribute name='action'>app.edit.tiling</attribute>"
+                "</item>"
             "</section>"
         "</submenu>"
         "<submenu>"
@@ -357,6 +361,7 @@ void GPITool::on_startup()
     add_action("file.quit", sigc::mem_fun(*this, &GPITool::OnMenuFileQuit));
     add_action("edit.palette", sigc::mem_fun(*this, &GPITool::OnMenuEditPalette));
     add_action("edit.dither", sigc::mem_fun(*this, &GPITool::OnMenuEditDither));
+    add_action("edit.tiling", sigc::mem_fun(*this, &GPITool::OnMenuEditTiling));
     add_action("help.about", sigc::mem_fun(*this, &GPITool::OnMenuHelpAbout));
 
     builderRef = Gtk::Builder::create();
@@ -376,13 +381,23 @@ void GPITool::CreateWindow()
 {
     mwin = new MainWindow();
     add_window(*mwin);
-    mwin->signal_hide().connect(sigc::bind<Gtk::Window*>(sigc::mem_fun(*this, &GPITool::OnHideWindow), mwin));
+    mwin->signal_hide().connect(sigc::bind<MainWindow*>(sigc::mem_fun(*this, &GPITool::OnHideMainWindow), mwin));
     mwin->show_all();
 }
 
-void GPITool::OnHideWindow(Gtk::Window* window)
+void GPITool::OnHideMainWindow(MainWindow* mainwindow)
 {
-    delete window;
+    if (colPickWin != nullptr) delete colPickWin;
+    if (dithWin != nullptr) delete dithWin;
+    if (tileWin != nullptr) delete tileWin;
+    delete mainwindow;
+}
+
+
+void GPITool::OnHideWindow(Gtk::Window** window)
+{
+    delete *window;
+    *window = nullptr;
 }
 
 void GPITool::OnMenuFileOpen()
@@ -456,7 +471,7 @@ void GPITool::OnMenuEditPalette()
 {
     colPickWin = new ColourPickerWindow(ihand, mwin);
     add_window(*colPickWin);
-    colPickWin->signal_hide().connect(sigc::bind<Gtk::Window*>(sigc::mem_fun(*this, &GPITool::OnHideWindow), colPickWin));
+    colPickWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&colPickWin)));
     colPickWin->show_all();
 }
 
@@ -464,9 +479,18 @@ void GPITool::OnMenuEditDither()
 {
     dithWin = new DitherWindow(ihand, mwin);
     add_window(*dithWin);
-    dithWin->signal_hide().connect(sigc::bind<Gtk::Window*>(sigc::mem_fun(*this, &GPITool::OnHideWindow), dithWin));
+    dithWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&dithWin)));
     dithWin->show_all();
 }
+
+void GPITool::OnMenuEditTiling()
+{
+    tileWin = new TilingWindow(ihand, mwin);
+    add_window(*tileWin);
+    tileWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&tileWin)));
+    tileWin->show_all();
+}
+
 
 void GPITool::OnMenuHelpAbout()
 {

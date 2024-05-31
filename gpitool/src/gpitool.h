@@ -31,6 +31,7 @@
 #include "mainwindow.h"
 #include "colourpickerwindow.h"
 #include "ditherwindow.h"
+#include "tilingwindow.h"
 #include "imagehandler.h"
 #include "imagecompressor.h"
 
@@ -48,12 +49,14 @@ protected:
 private:
     void CreateWindow();
 
-    void OnHideWindow(Gtk::Window* window);
+    void OnHideMainWindow(MainWindow* mainwindow);
+    void OnHideWindow(Gtk::Window** window);
     void OnMenuFileOpen();
     void OnMenuFileExport();
     void OnMenuFileQuit();
     void OnMenuEditPalette();
     void OnMenuEditDither();
+    void OnMenuEditTiling();
     void OnMenuHelpAbout();
     void OnAboutDialogResponse(int responseID);
 
@@ -62,6 +65,7 @@ private:
     MainWindow* mwin;
     ColourPickerWindow* colPickWin;
     DitherWindow* dithWin;
+    TilingWindow* tileWin;
     ImageHandler* ihand;
     ImageCompressor* icomp;
 };

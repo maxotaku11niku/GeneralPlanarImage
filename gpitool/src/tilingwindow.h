@@ -1,4 +1,4 @@
-/* GPIVIEW - reference implementation of a viewer of GPI files for DOS based systems
+/* gpitool - Converts images into .GPI format
  * Copyright (c) 2024 Maxim Hoxha
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,45 +19,40 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * GPI reader and decoder
+ * Tiling settings window
  */
 
 #pragma once
 
-#include "doscalls.h"
+#include <glibmm.h>
+#include <gtkmm/adjustment.h>
+#include <gtkmm/window.h>
+#include <gtkmm/checkbutton.h>
+#include <gtkmm/radiobutton.h>
+#include <gtkmm/builder.h>
+#include "imagehandler.h"
+#include "mainwindow.h"
 
-#define GPI_HEADER_SIZE 0x0E
-
-#define GPI_COMPRESSION         0x01
-#define GPI_COMPRESSION_LZ4     0x00
-#define GPI_ENDIAN              0x04
-#define GPI_ENDIAN_BIG          0x00
-#define GPI_ENDIAN_LITTLE       0x04
-#define GPI_BPC                 0x08
-#define GPI_BPC_4               0x00
-#define GPI_BPC_8               0x08
-
-typedef struct
+class TilingWindow : public Gtk::Window
 {
-    __far unsigned char* planes[9];
-    unsigned long bytesPerPlane;
-    unsigned long decHeight;
-    unsigned char* palette;
-    unsigned short palSize;
-    doshandle handle;
-    unsigned short width;
-    unsigned short byteWidth;
-    unsigned short height;
-    unsigned short numTiles;
-    unsigned short filtPlanes;
-    int displayX;
-    int displayY;
-    unsigned char flags;
-    unsigned char hasMask;
-    unsigned char numPlanes;
-} GPIInfo;
+public:
+    TilingWindow(ImageHandler* handler, MainWindow* mainwind);
+    virtual ~TilingWindow();
 
-int OpenGPIFile(const char* path, GPIInfo* info);
-void DecompressGPIFile(GPIInfo* info);
-void ReorganiseTilesInGPI(GPIInfo* info);
-void CloseGPIFile(GPIInfo* info);
+protected:
+    Glib::RefPtr<Gtk::Builder> builderRef;
+    Glib::RefPtr<Gtk::Adjustment> tileSizeX;
+    Glib::RefPtr<Gtk::Adjustment> tileSizeY;
+    Gtk::CheckButton* enableCheck;
+    Gtk::RadioButton* rowmajRadio;
+    Gtk::RadioButton* colmajRadio;
+
+    void OnToggleTiling();
+    void OnSetTileSizeX();
+    void OnSetTileSizeY();
+    void OnToggleOrder();
+
+private:
+    MainWindow* mwin;
+    ImageHandler* ihand;
+};

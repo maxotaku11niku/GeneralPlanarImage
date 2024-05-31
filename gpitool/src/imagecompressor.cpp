@@ -62,9 +62,17 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
     unsigned char flags = 0x00;
     if (pinfo.is8BitColour) flags |= 0x08;
     header[0x3] = flags; //Flags
-    *((uint16_t*)(&header[0x4])) = (uint16_t)(iinfo->width - 1);
-    *((uint16_t*)(&header[0x6])) = (uint16_t)(iinfo->height - 1);
-    *((uint16_t*)(&header[0x8])) = 0x0000; //Number of tiles (fixed to 1 for now)
+    if (ihand->isTiled)
+    {
+        *((uint16_t*)(&header[0x4])) = (uint16_t)(ihand->tileSizeX - 1);
+        *((uint16_t*)(&header[0x6])) = (uint16_t)(ihand->tileSizeY - 1);
+    }
+    else
+    {
+        *((uint16_t*)(&header[0x4])) = (uint16_t)(iinfo->width - 1);
+        *((uint16_t*)(&header[0x6])) = (uint16_t)(iinfo->height - 1);
+    }
+    *((uint16_t*)(&header[0x8])) = (uint16_t)(pinfo.numTiles - 1); //Number of tiles
     *((uint16_t*)(&header[0xA])) = pinfo.planeMask;
     *((uint16_t*)(&header[0xC])) = 0; //Fill this in as we figure out if filtering is useful for each of the planes
     if (pinfo.is8BitColour)
@@ -137,9 +145,10 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
     int planeFilterMask = 0;
 
     //Compress planes
-    unsigned char* filterTable = new unsigned char[(pinfo.planeh+1)/2];
+    int totalHeight = pinfo.planeh * pinfo.numTiles;
+    unsigned char* filterTable = new unsigned char[(totalHeight+1)/2];
     unsigned char* fPlane = new unsigned char[pinfo.planeSize];
-    unsigned int* rowOccurrence = new unsigned int[pinfo.planeh * 256];
+    unsigned int* rowOccurrence = new unsigned int[totalHeight * 256];
     unsigned char* fRows[16];
     for (int i = 0; i < 16; i++)
     {
@@ -157,7 +166,8 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
         unsigned char* compressedDataFiltered = new unsigned char[pinfo.planeSize * 2]; //overallocate just in case
         unsigned char* compressedDataUnfiltered = new unsigned char[pinfo.planeSize * 2]; //overallocate just in case
         int pw = pinfo.planew;
-        int ph = pinfo.planeh;
+        int th = pinfo.planeh;
+        int ph = totalHeight;
         int totalOccurrence[256];
         int tempOccurrence[256*16];
         double entropy[16];
@@ -197,9 +207,13 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
                                 continue;
                             }
                             break;
-                        case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), current tile must not be 0 (TODO)
-                            entropy[n] = 9999999999999999999999999999.9;
-                            continue;
+                        case 3: //filt = S[x,y] XOR S[x,y-height] (one tile before), current tile must not be 0
+                            if (j < th)
+                            {
+                                entropy[n] = 9999999999999999999999999999.9;
+                                continue;
+                            }
+                            break;
                         case 4: //filt = S[x,y] XOR S[x,y] one plane before, current plane must be 1 or higher
                             if (i < 1)
                             {
@@ -262,7 +276,7 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
                             for (int m = 0; m < pw; m++)
                             {
                                 unsigned char in1 = curPlane[k * pw + m];
-                                unsigned char in2 = curPlane[(k - ph) * pw + m];
+                                unsigned char in2 = curPlane[(k - th) * pw + m];
                                 unsigned char out = in1 ^ in2;
                                 fRows[n][m] = out;
                             }
@@ -348,7 +362,7 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
                             for (int m = 0; m < pw; m++)
                             {
                                 unsigned char in1 = curPlane[k * pw + m];
-                                unsigned char in2 = curPlane[(k - ph) * pw + m];
+                                unsigned char in2 = curPlane[(k - th) * pw + m];
                                 unsigned char out = in1 ^ in2;
                                 fRows[n][m] = ~out;
                             }
@@ -507,8 +521,8 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
         }
 
         //Copy filter table into the compressed data section
-        memcpy(compressedDataFiltered, filterTable, (pinfo.planeh+1)/2);
-        unsigned char* cptrf = compressedDataFiltered + ((pinfo.planeh+1)/2);
+        memcpy(compressedDataFiltered, filterTable, (totalHeight+1)/2);
+        unsigned char* cptrf = compressedDataFiltered + ((totalHeight+1)/2);
         unsigned char* cptru = compressedDataUnfiltered;
 
 #ifdef USING_COMPRESSION_DEFLATE
@@ -521,7 +535,7 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
         zStreamF.next_in = fPlane;
         zStreamF.avail_in = pinfo.planeSize;
         zStreamF.next_out = cptrf + 4;
-        zStreamF.avail_out = pinfo.planeSize * 2 - (4 + ((pinfo.planeh+1)/2));
+        zStreamF.avail_out = pinfo.planeSize * 2 - (4 + ((totalHeight+1)/2));
         zStreamF.data_type = Z_BINARY;
         deflate(&zStreamF, Z_FINISH);
         compressedSizeFiltered = zStreamF.total_out;
@@ -543,12 +557,12 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
 #endif
 #ifdef USING_COMPRESSION_LZ4
         //Compress filtered data using LZ4
-        compressedSizeFiltered = LZ4_compress_HC((char*)fPlane, (char*)(cptrf + 4), pinfo.planeSize, pinfo.planeSize * 2 - (4 + ((pinfo.planeh+1)/2)), LZ4HC_CLEVEL_MAX);
+        compressedSizeFiltered = LZ4_compress_HC((char*)fPlane, (char*)(cptrf + 4), pinfo.planeSize, pinfo.planeSize * 2 - (4 + ((totalHeight+1)/2)), LZ4HC_CLEVEL_MAX);
         //Compress unfiltered data using LZ4
         compressedSizeUnfiltered = LZ4_compress_HC((char*)curPlane, (char*)(cptru + 4), pinfo.planeSize, pinfo.planeSize * 2 - 4, LZ4HC_CLEVEL_MAX);
 #endif
         //Choose filtered alternative only if 1. filtering was effective for at least one line 2. size of compressed filtered data + filter spec table < size of compressed unfiltered data
-        if (isFiltered && (compressedSizeFiltered + ((pinfo.planeh+1)/2)) < compressedSizeUnfiltered)
+        if (isFiltered && (compressedSizeFiltered + ((totalHeight+1)/2)) < compressedSizeUnfiltered)
         {
             *((uint32_t*)(&cptrf[0])) = compressedSizeFiltered;
             printf("Plane %i done, size %i\n", i, compressedSizeFiltered);
@@ -579,8 +593,8 @@ int ImageCompressor::CompressAndSaveImage(char* outFileName)
         uint32_t size;
         if (planeFilterMask & planeFilterMasks[i])
         {
-            size = *((uint32_t*)(&curPlane[((pinfo.planeh+1)/2)]));
-            size += 4 + ((pinfo.planeh+1)/2);
+            size = *((uint32_t*)(&curPlane[((totalHeight+1)/2)]));
+            size += 4 + ((totalHeight+1)/2);
         }
         else
         {

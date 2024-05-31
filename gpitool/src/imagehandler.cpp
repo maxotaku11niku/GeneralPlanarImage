@@ -243,6 +243,11 @@ ImageHandler::ImageHandler()
     postBrightness = 0.0;
     postContrast = 0.0;
     boustrophedon = false;
+
+    isTiled = false;
+    tileSizeX = 16;
+    tileSizeY = 16;
+    tileOrdering = ROWMAJOR;
 }
 
 ImageHandler::~ImageHandler()
@@ -1424,10 +1429,52 @@ PlanarInfo ImageHandler::GeneratePlanarData()
     int w = encImage.width;
     int h = encImage.height;
     long long imgsize = ((long long)w) * ((long long)h);
-    int pwidth = (w + 0x7)/0x8;
-    int psize = pwidth * h;
+    int scw, sch;
+    int tMajor, tMinor;
+    int strideMajor, strideMinor;
+    int finalW, finalH;
+    if (isTiled)
+    {
+        scw = tileSizeX;
+        sch = tileSizeY;
+        switch (tileOrdering)
+        {
+            case ROWMAJOR:
+                strideMinor = scw;
+                strideMajor = w * sch;
+                tMinor = ((w + (scw - 1))/scw);
+                tMajor = ((h + (sch - 1))/sch);
+                break;
+            case COLUMNMAJOR:
+                strideMinor = w * sch;
+                strideMajor = scw;
+                tMinor = ((h + (sch - 1))/sch);
+                tMajor = ((w + (scw - 1))/scw);
+                break;
+        }
+        finalH = h % sch;
+        finalW = w % scw;
+        if (finalH == 0) finalH = sch;
+        if (finalW == 0) finalW = scw;
+        outinf.numTiles = tMajor * tMinor;
+    }
+    else
+    {
+        scw = w;
+        sch = h;
+        outinf.numTiles = 1;
+        tMajor = 1;
+        tMinor = 1;
+        strideMinor = w * h;
+        strideMajor = w * h;
+        finalH = h;
+        finalW = w;
+    }
+    int pwidth = (scw + 0x7)/0x8;
+    int tsize = pwidth * sch;
+    int psize = tsize * outinf.numTiles;
     outinf.planew = pwidth;
-    outinf.planeh = h;
+    outinf.planeh = sch;
     outinf.planeSize = psize;
     short* indices = new short[imgsize];
     uint32_t* img = (uint32_t*)encImage.data;
@@ -1452,6 +1499,8 @@ PlanarInfo ImageHandler::GeneratePlanarData()
             else indices[i] = 0;
         }
     }
+
+    //Make planar data
     unsigned char** pData = new unsigned char*[outinf.numPlanes];
     outinf.planeData = pData;
     int splane = 0;
@@ -1463,12 +1512,47 @@ PlanarInfo ImageHandler::GeneratePlanarData()
     {
         splane++;
         unsigned char* curPlane = pData[0];
-        for (int i = 0; i < h; i++)
+        for (int i = 0; i < tMajor; i++)
         {
-            for (int j = 0; j < w; j++)
+            for (int j = 0; j < tMinor; j++)
             {
-                short ind = indices[i * w + j];
-                if (ind >= 0) curPlane[i * pwidth + (j >> 3)] |= (0x01 << (7 - (j & 0x7)));
+                short* tileIndices = indices + i * strideMajor + j * strideMinor;
+                int maxx, maxy;
+                switch (tileOrdering)
+                {
+                    case ROWMAJOR:
+                        if (j == (tMinor - 1))
+                        {
+                            maxx = finalW;
+                        }
+                        else maxx = scw;
+                        if (i == (tMajor - 1))
+                        {
+                            maxy = finalH;
+                        }
+                        else maxy = sch;
+                        break;
+                    case COLUMNMAJOR:
+                        if (j == (tMinor - 1))
+                        {
+                            maxy = finalH;
+                        }
+                        else maxy = sch;
+                        if (i == (tMajor - 1))
+                        {
+                            maxx = finalW;
+                        }
+                        else maxx = scw;
+                        break;
+                }
+                for (int k = 0; k < maxy; k++)
+                {
+                    for (int n = 0; n < maxx; n++)
+                    {
+                        short ind = tileIndices[k * w + n];
+                        if (ind >= 0) curPlane[(i * tMinor + j) * tsize + k * pwidth + (n >> 3)] |= (0x01 << (7 - (n & 0x7)));
+                    }
+                }
             }
         }
     }
@@ -1477,14 +1561,49 @@ PlanarInfo ImageHandler::GeneratePlanarData()
     {
         unsigned char* curPlane = pData[i];
         short curMask = 0x0001 << (i - splane);
-        for (int j = 0; j < h; j++)
+        for (int j = 0; j < tMajor; j++)
         {
-            for (int k = 0; k < w; k++)
+            for (int k = 0; k < tMinor; k++)
             {
-                short ind = indices[j * w + k];
-                if ((ind >= 0) && (ind & curMask))
+                short* tileIndices = indices + j * strideMajor + k * strideMinor;
+                int maxx, maxy;
+                switch (tileOrdering)
                 {
-                    curPlane[j * pwidth + (k >> 3)] |= (0x01 << (7 - (k & 0x7)));
+                    case ROWMAJOR:
+                        if (k == (tMinor - 1))
+                        {
+                            maxx = finalW;
+                        }
+                        else maxx = scw;
+                        if (j == (tMajor - 1))
+                        {
+                            maxy = finalH;
+                        }
+                        else maxy = sch;
+                        break;
+                    case COLUMNMAJOR:
+                        if (k == (tMinor - 1))
+                        {
+                            maxy = finalH;
+                        }
+                        else maxy = sch;
+                        if (j == (tMajor - 1))
+                        {
+                            maxx = finalW;
+                        }
+                        else maxx = scw;
+                        break;
+                }
+                for (int n = 0; n < maxy; n++)
+                {
+                    for (int m = 0; m < maxx; m++)
+                    {
+                        short ind = tileIndices[n * w + m];
+                        if ((ind >= 0) && (ind & curMask))
+                        {
+                            curPlane[(j * tMinor + k) * tsize + n * pwidth + (m >> 3)] |= (0x01 << (7 - (m & 0x7)));
+                        }
+                    }
                 }
             }
         }

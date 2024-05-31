@@ -76,6 +76,7 @@ int main(int argc, char** argv)
         int kc = 0;
 
         DecompressGPIFile(&imageInfo);
+        ReorganiseTilesInGPI(&imageInfo);
         DrawRectPortion(&imageInfo, 0, 0);
 
         while(1)

@@ -67,6 +67,7 @@ typedef struct
     unsigned short planeMask;
     int planew;
     int planeh;
+    int numTiles;
     int planeSize;
     int numPlanes;
     int numColours;
@@ -268,6 +269,12 @@ enum ditherMethods
     ATKINSON
 };
 
+enum tileOrderings
+{
+    ROWMAJOR,
+    COLUMNMAJOR
+};
+
 class ImageHandler
 {
 public:
@@ -347,6 +354,11 @@ public:
     double postBrightness;
     double postContrast;
     bool boustrophedon;
+
+    bool isTiled;
+    int tileSizeX;
+    int tileSizeY;
+    int tileOrdering;
 
 private:
     inline unsigned long long RNGUpdate()

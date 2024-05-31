@@ -22,6 +22,7 @@
  * GPI reader and decoder
  */
 
+#include "x86strops.h"
 #include "lz4.h"
 #include "gpimage.h"
 
@@ -145,7 +146,7 @@ void DecompressGPIFile(GPIInfo* info)
         unsigned long compressedSize = 0;
         unsigned short bytesRead;
         unsigned char isFiltered = (unsigned char)((filt & filtCheck) != 0);
-        if (isFiltered) DOSReadFile(info->handle, (h+1)/2, (__far unsigned char*)filterBuffer, &bytesRead);
+        if (isFiltered) DOSReadFile(info->handle, (dh+1)/2, (__far unsigned char*)filterBuffer, &bytesRead);
         DOSReadFile(info->handle, 4, (__far unsigned char*)decompressionBuffer, &bytesRead);
         compressedSize = *((__far unsigned long*)(&decompressionBuffer[0]));
         DOSReadFile(info->handle, compressedSize, (__far unsigned char*)(decompressionBuffer + 4), &bytesRead);
@@ -288,6 +289,60 @@ void DecompressGPIFile(GPIInfo* info)
     }
     DOSMemFree(decompressionBuffer);
 }
+
+//Helper function to transform a tiled image into a non-tiled image, assumes row-major order
+void ReorganiseTilesInGPI(GPIInfo* info)
+{
+    if (info->numTiles <= 1) return; //Just one tile -> nothing to do
+
+    //Find appropriate presentation format
+    unsigned short totalTiles = info->numTiles;
+    unsigned int tileWidth = totalTiles;
+    unsigned int tileHeight = 1;
+    for (unsigned int i = 2; i < totalTiles; i++)
+    {
+        unsigned int fac = totalTiles/i;
+        if (fac < i)
+        {
+            break;
+        }
+        else if ((totalTiles % i) == 0)
+        {
+            tileWidth = fac;
+            tileHeight = i;
+        }
+    }
+
+    //Reorganise plane data appropriately
+    unsigned int bpp = info->bytesPerPlane;
+    unsigned int h = info->height;
+    unsigned int w = info->byteWidth;
+    unsigned int totalW = w * tileWidth;
+    unsigned int totalH = h * tileHeight;
+    unsigned int tileSize = w * h;
+    __far unsigned char* roBuffer = (__far unsigned char*)DOSMemAlloc((unsigned short)((bpp + 15) >> 4));
+    for (int i = 0; i < info->numPlanes; i++)
+    {
+        //MemsetFar(0x00, roBuffer, bpp);
+        __far unsigned char* planeDat = info->planes[i];
+        for (int j = 0; j < tileHeight; j++)
+        {
+            for (int k = 0; k < tileWidth; k++)
+            {
+                for (int n = 0; n < h; n++)
+                {
+                    MemcpyFar(planeDat + (n * w + tileSize * (k + j * tileWidth)), roBuffer + (n + j * h) * totalW + (k * w), w);
+                }
+            }
+        }
+        MemcpyFar(roBuffer, planeDat, bpp);
+    }
+    info->byteWidth = totalW;
+    info->width = totalW * 8;
+    info->height = totalH;
+    DOSMemFree(roBuffer);
+}
+
 
 void CloseGPIFile(GPIInfo* info)
 {

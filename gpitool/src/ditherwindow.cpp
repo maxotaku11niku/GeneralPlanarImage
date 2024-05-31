@@ -797,7 +797,7 @@ static const char* uiXML =
 DitherWindow::DitherWindow(ImageHandler* handler, MainWindow* mainwind)
 {
     set_title("Dither Settings");
-    set_default_size(480, 640);
+    set_default_size(360, 2);
     builderRef = Gtk::Builder::create();
     builderRef->add_from_string(uiXML);
 

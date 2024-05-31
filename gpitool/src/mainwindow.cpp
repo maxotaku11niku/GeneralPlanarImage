@@ -49,7 +49,7 @@ static const char* uiXML =
 MainWindow::MainWindow()
 {
     set_title("GPITool");
-    set_default_size(1280, 600);
+    set_default_size(800, 600);
     builderRef = Gtk::Builder::create();
     builderRef->add_from_string(uiXML);
 
