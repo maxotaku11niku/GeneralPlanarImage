@@ -525,6 +525,8 @@ bool ImageHandler::LoadPaletteFile(char* inFileName)
                     coloursParsed++;
                     if (coloursParsed >= numColours) break;
                 }
+                scanningHex = false;
+                parselen = 0;
             }
             inComment = true;
         }
@@ -552,10 +554,10 @@ bool ImageHandler::LoadPaletteFile(char* inFileName)
                     coloursParsed++;
                     if (coloursParsed >= numColours) break;
                 }
+                scanningHex = false;
             }
             parseStartPtr = filePtr;
             parselen = 0;
-            scanningHex = false;
             inComment = false;
         }
         else if (!inComment)
@@ -575,6 +577,7 @@ bool ImageHandler::LoadPaletteFile(char* inFileName)
                         palette[coloursParsed].B = colNum & 0xFF;
                         coloursParsed++;
                         if (coloursParsed >= numColours) break;
+                        parselen = 0;
                     }
                 }
                 else
@@ -606,6 +609,8 @@ bool ImageHandler::LoadPaletteFile(char* inFileName)
                     coloursParsed++;
                     if (coloursParsed >= numColours) break;
                 }
+                scanningHex = false;
+                parselen = 0;
             }
         }
     }

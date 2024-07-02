@@ -16,15 +16,25 @@ export OFILESC      := $(CFILES:.c=.o)
 export OFILESCPP    := $(CPPFILES:.cpp=.o)
 export OFILES       := $(OFILESC) $(OFILESCPP)
 export FULLOFILES   := $(addprefix $(BUILD)/,$(OFILES))
+
+# Hacky overrides for my own use, they don't interfere with 'sane' building
+ifdef MHB_SYSTEM_INCLUDE
+MHB_SYSTEM_INCLUDE := -isystem$(MHB_SYSTEM_INCLUDE)
+endif
+
+ifdef MHB_SYSTEM_LIBS
+MHB_SYSTEM_LIBS := -L$(MHB_SYSTEM_LIBS)
+endif
+
 # Flags and libraries
 export CC               := gcc
 export CXX              := g++
-export CFLAGSBASE       := -fopenmp `pkg-config gtkmm-3.0 --cflags`
+export CFLAGSBASE       := -fopenmp $(MHB_SYSTEM_INCLUDE) `pkg-config gtkmm-3.0 --cflags`
 export CFLAGSDEBUG      := $(CFLAGSBASE) -Og
-export CFLAGSRELEASE    := $(CFLAGSBASE) -O3 -flto -fno-trapping-math -fno-math-errno -ffp-contract=fast -ffinite-math-only -fno-signed-zeros -freciprocal-math
+export CFLAGSRELEASE    := $(CFLAGSBASE) -O3 -flto=auto -fno-trapping-math -fno-math-errno -ffp-contract=fast -ffinite-math-only -fno-signed-zeros -freciprocal-math
 export CFLAGS           := $(CFLAGSBASE)
 export CXXFLAGS         := -DGLIBMM_DISABLE_DEPRECATED -DGIOMM_DISABLE_DEPRECATED -DGTKMM_DISABLE_DEPRECATED -DGDKMM_DISABLE_DEPRECATED
-export LINKFLAGSBASE    :=
+export LINKFLAGSBASE    := $(MHB_SYSTEM_LIBS)
 export LINKFLAGSDEBUG   := $(LINKFLAGSBASE)
 export LINKFLAGSRELEASE := $(LINKFLAGSBASE) -Wl,-s
 export LINKFLAGS        := $(LINKFLAGSBASE)
@@ -42,8 +52,8 @@ debug : CFLAGS = $(CFLAGSDEBUG)
 default : LINKFLAGS = $(LINKFLAGSRELEASE)
 build-linux32 : LINKFLAGS = $(LINKFLAGSRELEASE)
 build-linux64 : LINKFLAGS = $(LINKFLAGSRELEASE)
-build-win32 : LINKFLAGS = $(LINKFLAGSRELEASE) -static
-build-win64 : LINKFLAGS = $(LINKFLAGSRELEASE) -static
+build-win32 : LINKFLAGS = $(LINKFLAGSRELEASE)
+build-win64 : LINKFLAGS = $(LINKFLAGSRELEASE)
 native : LINKFLAGS = $(LINKFLAGSRELEASE)
 debug : LINKFLAGS = $(LINKFLAGSDEBUG)
 

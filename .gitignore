@@ -3,6 +3,7 @@ test/
 gpitool/bin/
 gpitool/obj/
 gpitool/genasm/
+gpitool/build_win/
 GPIVIEW/bin/
 GPIVIEW/obj/
 GPIVIEW/genasm/
