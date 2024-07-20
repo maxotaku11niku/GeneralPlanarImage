@@ -267,7 +267,7 @@ int JpegSignatureCheck(unsigned char* inBuf)
     else return 0;
 }
 
-int ImageHandler::OpenImageFile(char* inFileName)
+int ImageHandler::OpenImageFile(const char* inFileName)
 {
     FILE* file = fopen(inFileName, "rb");
     if (file == nullptr)
@@ -474,7 +474,7 @@ bool ImageHandler::IsPalettePerfect()
     return true;
 }
 
-bool ImageHandler::LoadPaletteFile(char* inFileName)
+bool ImageHandler::LoadPaletteFile(const char* inFileName)
 {
     FILE* inFile = fopen(inFileName, "rb");
     if (inFile == nullptr)
@@ -636,7 +636,7 @@ bool ImageHandler::LoadPaletteFile(char* inFileName)
     return true;
 }
 
-bool ImageHandler::SavePaletteFile(char* outFileName)
+bool ImageHandler::SavePaletteFile(const char* outFileName)
 {
     FILE* outFile = fopen(outFileName, "w");
     if (outFile == nullptr)

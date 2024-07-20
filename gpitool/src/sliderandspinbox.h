@@ -19,35 +19,60 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Main window
+ * Slider and spin box combo classes, for convenience
  */
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/window.h>
-#include <gtkmm/applicationwindow.h>
-#include <gtkmm/builder.h>
-#include <gtkmm/image.h>
-#include <gdkmm/pixbuf.h>
-#include "imagehandler.h"
+#include <QSlider>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
 
-class MainWindow : public Gtk::ApplicationWindow
+class SliderAndSpinBox : public QWidget
 {
-public:
-    MainWindow();
-    virtual ~MainWindow();
+    Q_OBJECT
 
-    void SetNewImageThumbnail(ImageHandler* ihand);
-    void UpdateImageThumbnail(ImageHandler* ihand);
-    void UpdateImageThumbnailAfterDither(ImageHandler* ihand);
-    void UpdateImageThumbnailAfterFindColours(ImageHandler* ihand);
+public:
+    explicit SliderAndSpinBox(QWidget* parent = nullptr);
+
+    void SetMinimum(int min);
+    void SetMaximum(int max);
+    void SetRange(int min, int max);
+    void SetValue(int val);
+
+protected slots:
+    void OnSliderValueChanged(int newValue);
+    void OnSpinBoxValueChanged(int newValue);
+
+signals:
+    void ValueChanged(int newValue);
 
 protected:
-    Glib::RefPtr<Gtk::Builder> builderRef;
+    QSlider* slider;
+    QSpinBox* spinBox;
+};
 
-    Gtk::Image* mainImage;
+class SliderAndDoubleSpinBox : public QWidget
+{
+    Q_OBJECT
 
-private:
-    Glib::RefPtr<Gdk::Pixbuf> mainPixbuf;
+public:
+    explicit SliderAndDoubleSpinBox(QWidget* parent = nullptr);
+
+    void SetMinimum(double min);
+    void SetMaximum(double max);
+    void SetRange(double min, double max);
+    void SetSingleStep(double step);
+    void SetValue(double val);
+
+protected slots:
+    void OnSliderValueChanged(int newValue);
+    void OnSpinBoxValueChanged(double newValue);
+
+signals:
+    void ValueChanged(double newValue);
+
+protected:
+    QSlider* slider;
+    QDoubleSpinBox* spinBox;
 };

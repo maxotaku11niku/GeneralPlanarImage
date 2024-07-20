@@ -24,33 +24,32 @@
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/application.h>
-#include <gtkmm/builder.h>
-#include <gtkmm/aboutdialog.h>
-#include "mainwindow.h"
+#include <QMainWindow>
+#include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QGraphicsPixmapItem>
 #include "colourpickerwindow.h"
 #include "ditherwindow.h"
 #include "tilingwindow.h"
 #include "imagehandler.h"
 #include "imagecompressor.h"
 
-class GPITool : public Gtk::Application
+class ColourPickerWindow;
+class DitherWindow;
+class TilingWindow;
+
+class GPITool : public QMainWindow
 {
+    Q_OBJECT
+
 public:
-    static Glib::RefPtr<GPITool> create();
+    explicit GPITool(QWidget *parent = nullptr);
+    void SetNewImageThumbnail();
+    void UpdateImageThumbnail();
+    void UpdateImageThumbnailAfterDither();
+    void UpdateImageThumbnailAfterFindColours();
 
-protected:
-    GPITool();
-
-    void on_startup() override;
-    void on_activate() override;
-
-private:
-    void CreateWindow();
-
-    void OnHideMainWindow(MainWindow* mainwindow);
-    void OnHideWindow(Gtk::Window** window);
+private slots:
     void OnMenuFileOpen();
     void OnMenuFileExport();
     void OnMenuFileQuit();
@@ -58,14 +57,21 @@ private:
     void OnMenuEditDither();
     void OnMenuEditTiling();
     void OnMenuHelpAbout();
-    void OnAboutDialogResponse(int responseID);
+    void OnPaletteClose();
+    void OnDitherClose();
+    void OnTilingClose();
 
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Gtk::AboutDialog aboutDialog;
-    MainWindow* mwin;
+private:
+    QGraphicsView* sceneView;
+    QGraphicsScene* scene;
+    QGraphicsPixmapItem* image;
     ColourPickerWindow* colPickWin;
     DitherWindow* dithWin;
     TilingWindow* tileWin;
     ImageHandler* ihand;
     ImageCompressor* icomp;
+
+    bool colPickOpen;
+    bool dithOpen;
+    bool tileOpen;
 };

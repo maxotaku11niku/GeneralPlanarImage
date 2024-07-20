@@ -24,54 +24,57 @@
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/adjustment.h>
-#include <gtkmm/window.h>
-#include <gtkmm/comboboxtext.h>
-#include <gtkmm/checkbutton.h>
-#include <gtkmm/builder.h>
+#include <QDockWidget>
+#include <QSlider>
+#include <QDoubleSpinBox>
+#include <QComboBox>
+#include <QCheckBox>
+#include "sliderandspinbox.h"
 #include "imagehandler.h"
-#include "mainwindow.h"
+#include "gpitool.h"
 
-class DitherWindow : public Gtk::Window
+class GPITool;
+
+class DitherWindow : public QDockWidget
 {
+    Q_OBJECT
+
 public:
-    DitherWindow(ImageHandler* handler, MainWindow* mainwind);
-    virtual ~DitherWindow();
+    explicit DitherWindow(ImageHandler* handler, GPITool* parent);
 
 protected:
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Glib::RefPtr<Gtk::Adjustment> lumDither;
-    Glib::RefPtr<Gtk::Adjustment> satDither;
-    Glib::RefPtr<Gtk::Adjustment> hueDither;
-    Glib::RefPtr<Gtk::Adjustment> lumDiffusion;
-    Glib::RefPtr<Gtk::Adjustment> chromDiffusion;
-    Glib::RefPtr<Gtk::Adjustment> lumRandom;
-    Glib::RefPtr<Gtk::Adjustment> chromRandom;
-    Glib::RefPtr<Gtk::Adjustment> chromBias;
-    Glib::RefPtr<Gtk::Adjustment> preBright;
-    Glib::RefPtr<Gtk::Adjustment> preContrast;
-    Glib::RefPtr<Gtk::Adjustment> postBright;
-    Glib::RefPtr<Gtk::Adjustment> postContrast;
-    Gtk::ComboBoxText* ditherMethodBox;
-    Gtk::CheckButton* boustroCheck;
+    QComboBox* ditherMethodBox;
+    SliderAndDoubleSpinBox* lumDitherControl;
+    SliderAndDoubleSpinBox* satDitherControl;
+    SliderAndDoubleSpinBox* hueDitherControl;
+    SliderAndDoubleSpinBox* lumDiffusionControl;
+    SliderAndDoubleSpinBox* chromDiffusionControl;
+    SliderAndDoubleSpinBox* lumRandomControl;
+    SliderAndDoubleSpinBox* chromRandomControl;
+    SliderAndDoubleSpinBox* chromBiasControl;
+    SliderAndDoubleSpinBox* preBrightControl;
+    SliderAndDoubleSpinBox* preContrastControl;
+    SliderAndDoubleSpinBox* postBrightControl;
+    SliderAndDoubleSpinBox* postContrastControl;
+    QCheckBox* boustroCheck;
 
-    void OnSetDitherMethod();
-    void OnSetLuminosityDither();
-    void OnSetSaturationDither();
-    void OnSetHueDither();
-    void OnSetLuminosityDiffusion();
-    void OnSetChromaDiffusion();
-    void OnSetLuminosityRandomisation();
-    void OnSetChromaRandomisation();
-    void OnSetChromaBias();
-    void OnSetPreBrightness();
-    void OnSetPreContrast();
-    void OnSetPostBrightness();
-    void OnSetPostContrast();
-    void OnToggleBoustrophedon();
+private slots:
+    void OnSetDitherMethod(int index);
+    void OnSetLuminosityDither(double val);
+    void OnSetSaturationDither(double val);
+    void OnSetHueDither(double val);
+    void OnSetLuminosityDiffusion(double val);
+    void OnSetChromaDiffusion(double val);
+    void OnSetLuminosityRandomisation(double val);
+    void OnSetChromaRandomisation(double val);
+    void OnSetChromaBias(double val);
+    void OnSetPreBrightness(double val);
+    void OnSetPreContrast(double val);
+    void OnSetPostBrightness(double val);
+    void OnSetPostContrast(double val);
+    void OnToggleBoustrophedon(int state);
 
 private:
-    MainWindow* mwin;
     ImageHandler* ihand;
+    GPITool* mwin;
 };

@@ -24,46 +24,48 @@
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/adjustment.h>
-#include <gtkmm/window.h>
-#include <gtkmm/checkbutton.h>
-#include <gtkmm/radiobutton.h>
-#include <gtkmm/grid.h>
-#include <gtkmm/colorbutton.h>
-#include <gtkmm/builder.h>
+#include <QDockWidget>
+#include <QCheckBox>
+#include <QRadioButton>
+#include <QGridLayout>
+#include <QPushButton>
+#include "sliderandspinbox.h"
 #include "imagehandler.h"
-#include "mainwindow.h"
+#include "gpitool.h"
 
-class ColourPickerWindow : public Gtk::Window
+class GPITool;
+
+class ColourPickerWindow : public QDockWidget
 {
+    Q_OBJECT
+
 public:
-    ColourPickerWindow(ImageHandler* handler, MainWindow* mainwind);
-    virtual ~ColourPickerWindow();
+    explicit ColourPickerWindow(ImageHandler* handler, GPITool* parent);
+
+    void UpdateAfterOpenFile();
 
 protected:
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Glib::RefPtr<Gtk::Adjustment> transThreshold;
-    Gtk::CheckButton* planeChecks[9];
-    Gtk::RadioButton* bpc4Radio;
-    Gtk::RadioButton* bpc8Radio;
-    Gtk::Grid* colourGrid;
-    Gtk::ColorButton* colourButtons[256];
-    Gtk::Button* findBestPaletteButton;
-    Gtk::Button* loadPaletteButton;
-    Gtk::Button* savePaletteButton;
+    QCheckBox* planeChecks[9];
+    QRadioButton* bpc4Radio;
+    QRadioButton* bpc8Radio;
+    SliderAndSpinBox* transThresholdControl;
+    QGridLayout* colourGrid;
+    QPushButton* colourButtons[256];
+    QPushButton* findBestPaletteButton;
+    QPushButton* loadPaletteButton;
+    QPushButton* savePaletteButton;
 
     void ReorganisePaletteGrid(int numColourPlanes);
     void SetPaletteGridColours();
-    void OnTogglePlane(int planeNum);
-    void OnToggleBitDepth();
-    void OnSetTransparencyThreshold();
-    void OnSetColour(int index);
+    void OnTogglePlane(int state);
+    void OnToggleBitDepth(bool checked);
+    void OnSetTransparencyThreshold(int val);
+    void OnSetColour();
     void OnRequestBestPalette();
     void OnLoadPaletteFromFile();
     void OnSavePaletteToFile();
 
 private:
-    MainWindow* mwin;
     ImageHandler* ihand;
+    GPITool* mwin;
 };

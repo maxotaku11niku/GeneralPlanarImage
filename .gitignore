@@ -4,6 +4,7 @@ gpitool/bin/
 gpitool/obj/
 gpitool/genasm/
 gpitool/build_win/
+gpitool/src/qmoc_*
 GPIVIEW/bin/
 GPIVIEW/obj/
 GPIVIEW/genasm/

@@ -22,936 +22,199 @@
  * Dither settings window
  */
 
-#include <gtkmm/box.h>
+#include <QFormLayout>
 #include "ditherwindow.h"
 
-static const char* uiXML =
-"<interface>"
-    "<object class='GtkAdjustment' id='lumDither'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='satDither'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='hueDither'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>10.0</property>"
-        "<property name='step-increment'>0.01</property>"
-        "<property name='page-increment'>0.1</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='lumDiffusion'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='chromDiffusion'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='lumRandom'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>0.2</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='chromRandom'>"
-        "<property name='lower'>0.0</property>"
-        "<property name='upper'>0.2</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='chromBias'>"
-        "<property name='lower'>0.5</property>"
-        "<property name='upper'>2.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='preBright'>"
-        "<property name='lower'>-1.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='preContrast'>"
-        "<property name='lower'>-1.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='postBright'>"
-        "<property name='lower'>-1.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkAdjustment' id='postContrast'>"
-        "<property name='lower'>-1.0</property>"
-        "<property name='upper'>1.0</property>"
-        "<property name='step-increment'>0.001</property>"
-        "<property name='page-increment'>0.01</property>"
-    "</object>"
-    "<object class='GtkBox' id='mainView'>"
-        "<property name='visible'>True</property>"
-        "<property name='can-focus'>False</property>"
-        "<property name='orientation'>vertical</property>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Dither Method:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>0</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkComboBoxText' id='ditherMethodSelect'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>True</property>"
-                "<items>"
-                    "<item translatable='yes' id='NODITHER'>None</item>"
-                    "<item translatable='yes' id='BAYER2X2'>Bayer 2x2</item>"
-                    "<item translatable='yes' id='BAYER4X4'>Bayer 4x4</item>"
-                    "<item translatable='yes' id='BAYER8X8'>Bayer 8x8</item>"
-                    "<item translatable='yes' id='BAYER16X16'>Bayer 16x16</item>"
-                    "<item translatable='yes' id='VOID16X16'>Void and cluster 16x16</item>"
-                    "<item translatable='yes' id='FLOYD_STEINBERG'>Floyd-Steinberg</item>"
-                    "<item translatable='yes' id='FLOYD_FALSE'>False Floyd-Steinberg</item>"
-                    "<item translatable='yes' id='JJN'>Jarvis-Judice-Ninke</item>"
-                    "<item translatable='yes' id='STUCKI'>Stucki</item>"
-                    "<item translatable='yes' id='BURKES'>Burkes</item>"
-                    "<item translatable='yes' id='SIERRA'>Sierra</item>"
-                    "<item translatable='yes' id='SIERRA2ROW'>Sierra 2-Row</item>"
-                    "<item translatable='yes' id='FILTERLITE'>Filter Lite</item>"
-                    "<item translatable='yes' id='ATKINSON'>Atkinson</item>"
-                "</items>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>1</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Luminosity Dither:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>2</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>lumDither</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>lumDither</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>3</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Saturation Dither:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>4</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>satDither</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>satDither</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>5</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Hue Dither:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>6</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>hueDither</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>hueDither</property>"
-                        "<property name='climb-rate'>0.01</property>"
-                        "<property name='digits'>2</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>7</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Luminosity Error Diffusion:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>8</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>lumDiffusion</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>lumDiffusion</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>9</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Chroma Error Diffusion:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>10</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>chromDiffusion</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>chromDiffusion</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>11</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Luminosity Diffusion Randomisation:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>12</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>lumRandom</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>lumRandom</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>13</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Chroma Diffusion Randomisation:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>14</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>chromRandom</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>chromRandom</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>15</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Chroma Bias:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>16</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>chromBias</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>chromBias</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>17</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Pre-brightness:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>18</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>preBright</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>preBright</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>19</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Pre-contrast:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>20</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>preContrast</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>preContrast</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>21</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Post-brightness:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>22</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>postBright</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>postBright</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>23</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkLabel'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='label' translatable='yes'>Post-contrast:</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>24</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkBox'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>False</property>"
-                "<property name='orientation'>horizontal</property>"
-                "<child>"
-                    "<object class='GtkScale'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='adjustment'>postContrast</property>"
-                        "<property name='draw-value'>False</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>True</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>0</property>"
-                    "</packing>"
-                "</child>"
-                "<child>"
-                    "<object class='GtkSpinButton'>"
-                        "<property name='visible'>True</property>"
-                        "<property name='can-focus'>True</property>"
-                        "<property name='input-purpose'>number</property>"
-                        "<property name='adjustment'>postContrast</property>"
-                        "<property name='climb-rate'>0.001</property>"
-                        "<property name='digits'>3</property>"
-                        "<property name='numeric'>True</property>"
-                    "</object>"
-                    "<packing>"
-                        "<property name='expand'>False</property>"
-                        "<property name='fill'>True</property>"
-                        "<property name='position'>1</property>"
-                    "</packing>"
-                "</child>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>25</property>"
-            "</packing>"
-        "</child>"
-        "<child>"
-            "<object class='GtkCheckButton' id='boustroCheck'>"
-                "<property name='visible'>True</property>"
-                "<property name='can-focus'>True</property>"
-                "<property name='label' translatable='yes'>Boustrophedon Scanning</property>"
-            "</object>"
-            "<packing>"
-                "<property name='expand'>True</property>"
-                "<property name='fill'>True</property>"
-                "<property name='position'>26</property>"
-            "</packing>"
-        "</child>"
-    "</object>"
-"</interface>";
-
-DitherWindow::DitherWindow(ImageHandler* handler, MainWindow* mainwind)
+DitherWindow::DitherWindow(ImageHandler* handler, GPITool* parent) : QDockWidget((QWidget*)parent, Qt::Window)
 {
-    set_title("Dither Settings");
-    set_default_size(360, 2);
-    builderRef = Gtk::Builder::create();
-    builderRef->add_from_string(uiXML);
-
-    Gtk::Box* mainView;
-    builderRef->get_widget<Gtk::Box>("mainView", mainView);
-    add(*mainView);
-
-    Glib::RefPtr<Glib::Object> uiobj = builderRef->get_object("lumDither");
-    lumDither = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("satDither");
-    satDither = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("hueDither");
-    hueDither = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("lumDiffusion");
-    lumDiffusion = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("chromDiffusion");
-    chromDiffusion = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("lumRandom");
-    lumRandom = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("chromRandom");
-    chromRandom = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("chromBias");
-    chromBias = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("preBright");
-    preBright = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("preContrast");
-    preContrast = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("postBright");
-    postBright = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-    uiobj = builderRef->get_object("postContrast");
-    postContrast = Glib::RefPtr<Gtk::Adjustment>::cast_dynamic(uiobj);
-
-    builderRef->get_widget<Gtk::ComboBoxText>("ditherMethodSelect", ditherMethodBox);
-    builderRef->get_widget<Gtk::CheckButton>("boustroCheck", boustroCheck);
-
     ihand = handler;
-    mwin = mainwind;
+    mwin = parent;
+    setWindowTitle("Dither Settings");
+    resize(400, 100);
 
-    ditherMethodBox->signal_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetDitherMethod));
-    lumDither->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetLuminosityDither));
-    satDither->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetSaturationDither));
-    hueDither->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetHueDither));
-    lumDiffusion->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetLuminosityDiffusion));
-    chromDiffusion->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetChromaDiffusion));
-    lumRandom->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetLuminosityRandomisation));
-    chromRandom->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetChromaRandomisation));
-    chromBias->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetChromaBias));
-    preBright->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetPreBrightness));
-    preContrast->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetPreContrast));
-    postBright->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetPostBrightness));
-    postContrast->signal_value_changed().connect(sigc::mem_fun(*this, &DitherWindow::OnSetPostContrast));
-    boustroCheck->signal_toggled().connect(sigc::mem_fun(*this, &DitherWindow::OnToggleBoustrophedon));
+    QFormLayout* mainLayout = new QFormLayout();
+    ditherMethodBox = new QComboBox();
+    lumDitherControl = new SliderAndDoubleSpinBox();
+    satDitherControl = new SliderAndDoubleSpinBox();
+    hueDitherControl = new SliderAndDoubleSpinBox();
+    lumDiffusionControl = new SliderAndDoubleSpinBox();
+    chromDiffusionControl = new SliderAndDoubleSpinBox();
+    lumRandomControl = new SliderAndDoubleSpinBox();
+    chromRandomControl = new SliderAndDoubleSpinBox();
+    chromBiasControl = new SliderAndDoubleSpinBox();
+    preBrightControl = new SliderAndDoubleSpinBox();
+    preContrastControl = new SliderAndDoubleSpinBox();
+    postBrightControl = new SliderAndDoubleSpinBox();
+    postContrastControl = new SliderAndDoubleSpinBox();
+    boustroCheck = new QCheckBox();
 
-    ditherMethodBox->set_active(ihand->ditherMethod);
-    lumDither->set_value(ihand->luminosityDither);
-    satDither->set_value(ihand->saturationDither);
-    hueDither->set_value(ihand->hueDither);
-    lumDiffusion->set_value(ihand->luminosityDiffusion);
-    chromDiffusion->set_value(ihand->chromaDiffusion);
-    lumRandom->set_value(ihand->luminosityRandomisation);
-    chromRandom->set_value(ihand->chromaRandomisation);
-    chromBias->set_value(ihand->chromaBias);
-    preBright->set_value(ihand->preBrightness);
-    preContrast->set_value(ihand->preContrast);
-    postBright->set_value(ihand->postBrightness);
-    postContrast->set_value(ihand->postContrast);
-    boustroCheck->set_active(ihand->boustrophedon);
+    mainLayout->addRow("Dither Method", ditherMethodBox);
+    mainLayout->addRow("Luminosity Dither", lumDitherControl);
+    mainLayout->addRow("Saturation Dither", satDitherControl);
+    mainLayout->addRow("Hue Dither", hueDitherControl);
+    mainLayout->addRow("Luminosity Error Diffusion", lumDiffusionControl);
+    mainLayout->addRow("Chroma Error Diffusion", chromDiffusionControl);
+    mainLayout->addRow("Luminosity Diffusion Randomisation", lumRandomControl);
+    mainLayout->addRow("Chroma Diffusion Randomisation", chromRandomControl);
+    mainLayout->addRow("Chroma Bias", chromBiasControl);
+    mainLayout->addRow("Pre-brightness", preBrightControl);
+    mainLayout->addRow("Pre-contrast", preContrastControl);
+    mainLayout->addRow("Post-brightness", postBrightControl);
+    mainLayout->addRow("Post-contrast", postContrastControl);
+    mainLayout->addRow("Boustrophedon Scanning", boustroCheck);
+    mainLayout->setAlignment(Qt::AlignTop);
+
+    QWidget* mainWidget = new QWidget();
+    mainWidget->setLayout(mainLayout);
+    setWidget(mainWidget);
+
+    ditherMethodBox->addItems({ "None", "Bayer 2x2", "Bayer 4x4", "Bayer 8x8", "Bayer 16x16", "Void and cluster 16x16", "Floyd-Steinberg", "False Floyd-Steinberg", "Jarvis-Judice-Ninke", "Stucki", "Burkes", "Sierra", "Sierra 2-Row", "Filter Lite", "Atkinson" });
+    ditherMethodBox->setCurrentIndex(ihand->ditherMethod);
+    lumDitherControl->SetRange(0.0, 1.0);
+    lumDitherControl->SetSingleStep(0.001);
+    lumDitherControl->SetValue(ihand->luminosityDither);
+    satDitherControl->SetRange(0.0, 1.0);
+    satDitherControl->SetSingleStep(0.001);
+    satDitherControl->SetValue(ihand->saturationDither);
+    hueDitherControl->SetRange(0.0, 10.0);
+    hueDitherControl->SetSingleStep(0.01);
+    hueDitherControl->SetValue(ihand->hueDither);
+    lumDiffusionControl->SetRange(0.0, 1.0);
+    lumDiffusionControl->SetSingleStep(0.001);
+    lumDiffusionControl->SetValue(ihand->luminosityDiffusion);
+    chromDiffusionControl->SetRange(0.0, 1.0);
+    chromDiffusionControl->SetSingleStep(0.001);
+    chromDiffusionControl->SetValue(ihand->chromaDiffusion);
+    lumRandomControl->SetRange(0.0, 0.2);
+    lumRandomControl->SetSingleStep(0.0002);
+    lumRandomControl->SetValue(ihand->luminosityRandomisation);
+    chromRandomControl->SetRange(0.0, 0.2);
+    chromRandomControl->SetSingleStep(0.0002);
+    chromRandomControl->SetValue(ihand->chromaRandomisation);
+    chromBiasControl->SetRange(0.5, 2.0);
+    chromBiasControl->SetSingleStep(0.001);
+    chromBiasControl->SetValue(ihand->chromaBias);
+    preBrightControl->SetRange(-1.0, 1.0);
+    preBrightControl->SetSingleStep(0.001);
+    preBrightControl->SetValue(ihand->preBrightness);
+    preContrastControl->SetRange(-1.0, 1.0);
+    preContrastControl->SetSingleStep(0.001);
+    preContrastControl->SetValue(ihand->preContrast);
+    postBrightControl->SetRange(-1.0, 1.0);
+    postBrightControl->SetSingleStep(0.001);
+    postBrightControl->SetValue(ihand->postBrightness);
+    postContrastControl->SetRange(-1.0, 1.0);
+    postContrastControl->SetSingleStep(0.001);
+    postContrastControl->SetValue(ihand->postContrast);
+    boustroCheck->setChecked(ihand->boustrophedon);
+
+    connect(ditherMethodBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &DitherWindow::OnSetDitherMethod);
+    connect(lumDitherControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetLuminosityDither);
+    connect(satDitherControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetSaturationDither);
+    connect(hueDitherControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetHueDither);
+    connect(lumDiffusionControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetLuminosityDiffusion);
+    connect(chromDiffusionControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetChromaDiffusion);
+    connect(lumRandomControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetLuminosityRandomisation);
+    connect(chromRandomControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetChromaRandomisation);
+    connect(chromBiasControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetChromaBias);
+    connect(preBrightControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetPreBrightness);
+    connect(preContrastControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetPreContrast);
+    connect(postBrightControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetPostBrightness);
+    connect(postContrastControl, &SliderAndDoubleSpinBox::ValueChanged, this, &DitherWindow::OnSetPostContrast);
+    connect(boustroCheck, &QCheckBox::stateChanged, this, &DitherWindow::OnToggleBoustrophedon);
 }
 
-DitherWindow::~DitherWindow()
+void DitherWindow::OnSetDitherMethod(int index)
 {
-
+    if (index >= 0) ihand->ditherMethod = index;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetDitherMethod()
+void DitherWindow::OnSetLuminosityDither(double val)
 {
-    ihand->ditherMethod = ditherMethodBox->get_active_row_number();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->luminosityDither = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetLuminosityDither()
+void DitherWindow::OnSetSaturationDither(double val)
 {
-    ihand->luminosityDither = (double)lumDither->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->saturationDither = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetSaturationDither()
+void DitherWindow::OnSetHueDither(double val)
 {
-    ihand->saturationDither = (double)satDither->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->hueDither = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetHueDither()
+void DitherWindow::OnSetLuminosityDiffusion(double val)
 {
-    ihand->hueDither = (double)hueDither->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->luminosityDiffusion = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetLuminosityDiffusion()
+void DitherWindow::OnSetChromaDiffusion(double val)
 {
-    ihand->luminosityDiffusion = (double)lumDiffusion->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->chromaDiffusion = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetChromaDiffusion()
+void DitherWindow::OnSetLuminosityRandomisation(double val)
 {
-    ihand->chromaDiffusion = (double)chromDiffusion->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->luminosityRandomisation = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetLuminosityRandomisation()
+void DitherWindow::OnSetChromaRandomisation(double val)
 {
-    ihand->luminosityRandomisation = (double)lumRandom->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->chromaRandomisation = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetChromaRandomisation()
+void DitherWindow::OnSetChromaBias(double val)
 {
-    ihand->chromaRandomisation = (double)chromRandom->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->chromaBias = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetChromaBias()
+void DitherWindow::OnSetPreBrightness(double val)
 {
-    ihand->chromaBias = (double)chromBias->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->preBrightness = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetPreBrightness()
+void DitherWindow::OnSetPreContrast(double val)
 {
-    ihand->preBrightness = (double)preBright->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->preContrast = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetPreContrast()
+void DitherWindow::OnSetPostBrightness(double val)
 {
-    ihand->preContrast = (double)preContrast->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->postBrightness = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetPostBrightness()
+void DitherWindow::OnSetPostContrast(double val)
 {
-    ihand->postBrightness = (double)postBright->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    ihand->postContrast = val;
+    mwin->UpdateImageThumbnailAfterDither();
 }
 
-void DitherWindow::OnSetPostContrast()
+void DitherWindow::OnToggleBoustrophedon(int state)
 {
-    ihand->postContrast = (double)postContrast->get_value();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
-}
-
-void DitherWindow::OnToggleBoustrophedon()
-{
-    ihand->boustrophedon = boustroCheck->get_active();
-    mwin->UpdateImageThumbnailAfterDither(ihand);
+    switch (state)
+    {
+        case Qt::Unchecked:
+            ihand->boustrophedon = false;
+            break;
+        case Qt::PartiallyChecked:
+            ihand->boustrophedon = true;
+            break;
+        case Qt::Checked:
+            ihand->boustrophedon = true;
+            break;
+    }
+    mwin->UpdateImageThumbnailAfterDither();
 }

@@ -24,35 +24,37 @@
 
 #pragma once
 
-#include <glibmm.h>
-#include <gtkmm/adjustment.h>
-#include <gtkmm/window.h>
-#include <gtkmm/checkbutton.h>
-#include <gtkmm/radiobutton.h>
-#include <gtkmm/builder.h>
+#include <QDockWidget>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QRadioButton>
 #include "imagehandler.h"
-#include "mainwindow.h"
+#include "gpitool.h"
 
-class TilingWindow : public Gtk::Window
+class GPITool;
+
+class TilingWindow : public QDockWidget
 {
+    Q_OBJECT
+
 public:
-    TilingWindow(ImageHandler* handler, MainWindow* mainwind);
-    virtual ~TilingWindow();
+    explicit TilingWindow(ImageHandler* handler, GPITool* parent);
 
 protected:
-    Glib::RefPtr<Gtk::Builder> builderRef;
-    Glib::RefPtr<Gtk::Adjustment> tileSizeX;
-    Glib::RefPtr<Gtk::Adjustment> tileSizeY;
-    Gtk::CheckButton* enableCheck;
-    Gtk::RadioButton* rowmajRadio;
-    Gtk::RadioButton* colmajRadio;
+    //Glib::RefPtr<Gtk::Adjustment> tileSizeX;
+    //Glib::RefPtr<Gtk::Adjustment> tileSizeY;
+    QCheckBox* enableCheck;
+    QSpinBox* tileSizeXBox;
+    QSpinBox* tileSizeYBox;
+    QRadioButton* rowmajRadio;
+    QRadioButton* colmajRadio;
 
-    void OnToggleTiling();
-    void OnSetTileSizeX();
-    void OnSetTileSizeY();
-    void OnToggleOrder();
+private slots:
+    void OnToggleTiling(int state);
+    void OnSetTileSizeX(int val);
+    void OnSetTileSizeY(int val);
+    void OnToggleOrder(bool checked);
 
 private:
-    MainWindow* mwin;
     ImageHandler* ihand;
 };

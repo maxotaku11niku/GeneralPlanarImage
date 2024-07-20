@@ -12,8 +12,10 @@ export FULLCPPFILES := $(addprefix $(SOURCES)/,$(CPPFILES))
 export HEADERS      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.h)))
 export FULLHEADERS  := $(addprefix $(SOURCES)/,$(HEADERS))
 export GENASMFILES  := $(addprefix $(GENASM)/,$(CFILES:.c=.asm) $(CPPFILES:.cpp=.asm))
+export QMOCHEADERS  := colourpickerwindow.h ditherwindow.h gpitool.h sliderandspinbox.h tilingwindow.h
+export QMOCCPPFILES := $(addprefix qmoc_,$(QMOCHEADERS:.h=.cpp))
 export OFILESC      := $(CFILES:.c=.o)
-export OFILESCPP    := $(CPPFILES:.cpp=.o)
+export OFILESCPP    := $(CPPFILES:.cpp=.o) $(QMOCCPPFILES:.cpp=.o)
 export OFILES       := $(OFILESC) $(OFILESCPP)
 export FULLOFILES   := $(addprefix $(BUILD)/,$(OFILES))
 
@@ -29,16 +31,16 @@ endif
 # Flags and libraries
 export CC               := gcc
 export CXX              := g++
-export CFLAGSBASE       := -fopenmp $(MHB_SYSTEM_INCLUDE) `pkg-config gtkmm-3.0 --cflags`
+export CFLAGSBASE       := -fopenmp -fPIC $(MHB_SYSTEM_INCLUDE) `pkg-config Qt5Widgets --cflags`
 export CFLAGSDEBUG      := $(CFLAGSBASE) -Og
 export CFLAGSRELEASE    := $(CFLAGSBASE) -O3 -flto=auto -fno-trapping-math -fno-math-errno -ffp-contract=fast -ffinite-math-only -fno-signed-zeros -freciprocal-math
 export CFLAGS           := $(CFLAGSBASE)
-export CXXFLAGS         := -DGLIBMM_DISABLE_DEPRECATED -DGIOMM_DISABLE_DEPRECATED -DGTKMM_DISABLE_DEPRECATED -DGDKMM_DISABLE_DEPRECATED
+export CXXFLAGS         :=
 export LINKFLAGSBASE    := $(MHB_SYSTEM_LIBS)
 export LINKFLAGSDEBUG   := $(LINKFLAGSBASE)
 export LINKFLAGSRELEASE := $(LINKFLAGSBASE) -Wl,-s
 export LINKFLAGS        := $(LINKFLAGSBASE)
-export LINKLIBS         := -lpng -ljpeg -llz4 -lm `pkg-config gtkmm-3.0 --libs`
+export LINKLIBS         := -lpng -ljpeg -llz4 -lm `pkg-config Qt5Widgets --libs`
 
 # Define some variable overrides
 default : CFLAGS = $(CFLAGSRELEASE)
@@ -131,7 +133,23 @@ $(BUILD)/%.o : $(SOURCES)/%.cpp
 	$(CXX) -c $(CFLAGS) $(CXXFLAGS) -o $@ $<
 
 $(GENASM)/%.asm	: $(SOURCES)/%.c
-	$(CC) -c -O3 -S -o $@ $<
+	$(CC) -c $(CFLAGSBASE) -O3 -S -o $@ $<
 
 $(GENASM)/%.asm	: $(SOURCES)/%.cpp
-	$(CXX) -c -O3 $(CXXFLAGS) -S -o $@ $<
+	$(CXX) -c $(CFLAGSBASE) -O3 $(CXXFLAGS) -S -o $@ $<
+
+#Qt-specific meta-object compilation trash
+src/qmoc_colourpickerwindow.cpp : src/colourpickerwindow.h
+	moc -o $@ $<
+
+src/qmoc_ditherwindow.cpp : src/ditherwindow.h
+	moc -o $@ $<
+
+src/qmoc_gpitool.cpp : src/gpitool.h
+	moc -o $@ $<
+
+src/qmoc_sliderandspinbox.cpp : src/sliderandspinbox.h
+	moc -o $@ $<
+
+src/qmoc_tilingwindow.cpp : src/tilingwindow.h
+	moc -o $@ $<

@@ -50,7 +50,7 @@ ImageCompressor::~ImageCompressor()
 
 }
 
-int ImageCompressor::CompressAndSaveImage(char* outFileName)
+int ImageCompressor::CompressAndSaveImage(const char* outFileName)
 {
     //Header
     unsigned char header[782];

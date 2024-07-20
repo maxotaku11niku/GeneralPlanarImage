@@ -22,7 +22,14 @@
  * Application root
  */
 
-#include <gtkmm/filechooserdialog.h>
+#include <QApplication>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QMenu>
+#include <QMenuBar>
+#include <QPixmap>
+#include <QImage>
+#include <QBoxLayout>
 #include <omp.h>
 #include "gpitool.h"
 
@@ -279,240 +286,182 @@ static const char* licenseString =
 "permanent authorization for you to choose that version for the\n"
 "Library.\n\n";
 
-static const char* uiXML =
-"<interface>"
-    "<menu id='menubar'>"
-        "<submenu>"
-            "<attribute name='label' translatable='yes'>_File</attribute>"
-            "<section>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Open...</attribute>"
-                    "<attribute name='action'>app.file.open</attribute>"
-                "</item>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Export...</attribute>"
-                    "<attribute name='action'>app.file.export</attribute>"
-                "</item>"
-            "</section>"
-            "<section>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Quit</attribute>"
-                    "<attribute name='action'>app.file.quit</attribute>"
-                "</item>"
-            "</section>"
-        "</submenu>"
-        "<submenu>"
-            "<attribute name='label' translatable='yes'>_Edit</attribute>"
-            "<section>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Palette...</attribute>"
-                    "<attribute name='action'>app.edit.palette</attribute>"
-                "</item>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Dithering...</attribute>"
-                    "<attribute name='action'>app.edit.dither</attribute>"
-                "</item>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_Tiling...</attribute>"
-                    "<attribute name='action'>app.edit.tiling</attribute>"
-                "</item>"
-            "</section>"
-        "</submenu>"
-        "<submenu>"
-            "<attribute name='label' translatable='yes'>_Help</attribute>"
-            "<section>"
-                "<item>"
-                    "<attribute name='label' translatable='yes'>_About...</attribute>"
-                    "<attribute name='action'>app.help.about</attribute>"
-                "</item>"
-            "</section>"
-        "</submenu>"
-    "</menu>"
-"</interface>";
-
-GPITool::GPITool() : Gtk::Application()
+GPITool::GPITool(QWidget *parent) : QMainWindow()
 {
-    Glib::set_application_name("GPITool");
     ihand = new ImageHandler();
     icomp = new ImageCompressor();
     icomp->SetImageHandler(ihand);
-}
 
-Glib::RefPtr<GPITool> GPITool::create()
-{
-    return Glib::RefPtr<GPITool>(new GPITool());
-}
+    setWindowTitle("GPITool");
+    resize(800, 600);
 
-void GPITool::on_startup()
-{
-    Gtk::Application::on_startup();
+    QMenuBar* menubar = new QMenuBar(this);
+    QMenu* fileMenu = new QMenu("&File");
+    fileMenu->addAction("&Open...", this, &GPITool::OnMenuFileOpen);
+    fileMenu->addAction("&Export...", this, &GPITool::OnMenuFileExport);
+    fileMenu->addSeparator();
+    fileMenu->addAction("&Quit", this, &GPITool::OnMenuFileQuit);
+    menubar->addMenu(fileMenu);
+    QMenu* editMenu = new QMenu("&Edit");
+    editMenu->addAction("&Palette...", this, &GPITool::OnMenuEditPalette);
+    editMenu->addAction("&Dithering...", this, &GPITool::OnMenuEditDither);
+    editMenu->addAction("&Tiling...", this, &GPITool::OnMenuEditTiling);
+    menubar->addMenu(editMenu);
+    QMenu* helpMenu = new QMenu("&Help");
+    helpMenu->addAction("&About...", this, &GPITool::OnMenuHelpAbout);
+    menubar->addMenu(helpMenu);
+    setMenuBar(menubar);
 
-    aboutDialog.set_program_name("GPITool");
-    aboutDialog.set_version("0.4.0");
-    aboutDialog.set_copyright("Copyright (C) Maxim Hoxha 2024");
-    aboutDialog.set_comments("Converts images into .GPI format.");
-    aboutDialog.set_license(licenseString);
-    aboutDialog.set_website("https://maxotaku11niku.github.io/");
-    aboutDialog.set_website_label("My website");
-    aboutDialog.signal_response().connect(sigc::mem_fun(*this, &GPITool::OnAboutDialogResponse));
+    scene = new QGraphicsScene(this);
+    QPixmap imagePixmap = QPixmap();
+    image = scene->addPixmap(imagePixmap);
+    image->setVisible(true);
+    sceneView = new QGraphicsView(scene, this);
+    setCentralWidget(sceneView);
 
-    add_action("file.open", sigc::mem_fun(*this, &GPITool::OnMenuFileOpen));
-    add_action("file.export", sigc::mem_fun(*this, &GPITool::OnMenuFileExport));
-    add_action("file.quit", sigc::mem_fun(*this, &GPITool::OnMenuFileQuit));
-    add_action("edit.palette", sigc::mem_fun(*this, &GPITool::OnMenuEditPalette));
-    add_action("edit.dither", sigc::mem_fun(*this, &GPITool::OnMenuEditDither));
-    add_action("edit.tiling", sigc::mem_fun(*this, &GPITool::OnMenuEditTiling));
-    add_action("help.about", sigc::mem_fun(*this, &GPITool::OnMenuHelpAbout));
-
-    builderRef = Gtk::Builder::create();
-    builderRef->add_from_string(uiXML);
-
-    Glib::RefPtr<Glib::Object> uiobj = builderRef->get_object("menubar");
-    Glib::RefPtr<Gio::Menu> menubar = Glib::RefPtr<Gio::Menu>::cast_dynamic(uiobj);
-    set_menubar(menubar);
-}
-
-void GPITool::on_activate()
-{
-    CreateWindow();
-}
-
-void GPITool::CreateWindow()
-{
-    mwin = new MainWindow();
-    add_window(*mwin);
-    mwin->signal_hide().connect(sigc::bind<MainWindow*>(sigc::mem_fun(*this, &GPITool::OnHideMainWindow), mwin));
-    mwin->show_all();
-}
-
-void GPITool::OnHideMainWindow(MainWindow* mainwindow)
-{
-    if (colPickWin != nullptr) delete colPickWin;
-    if (dithWin != nullptr) delete dithWin;
-    if (tileWin != nullptr) delete tileWin;
-    delete mainwindow;
-}
-
-
-void GPITool::OnHideWindow(Gtk::Window** window)
-{
-    delete *window;
-    *window = nullptr;
+    colPickOpen = false;
+    dithOpen = false;
+    tileOpen = false;
 }
 
 void GPITool::OnMenuFileOpen()
 {
-    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Open File", Gtk::FILE_CHOOSER_ACTION_OPEN);
-    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
-    dialog.add_button("_Open", Gtk::RESPONSE_OK);
+    QString fileName = QFileDialog::getOpenFileName(this, "Open File", nullptr, "Image files (*.png *.jpg *.jpeg *.jfif)");
 
-    auto typeFilter = Gtk::FileFilter::create();
-    typeFilter->set_name("Image files");
-    typeFilter->add_pattern("*.png");
-    typeFilter->add_pattern("*.jpg");
-    typeFilter->add_pattern("*.jpeg");
-    typeFilter->add_pattern("*.jfif");
-    dialog.add_filter(typeFilter);
-
-    int result = dialog.run();
-
-    switch (result)
+    if (!fileName.isNull())
     {
-        case(Gtk::RESPONSE_OK):
-            ihand->CloseImageFile();
-            if (!ihand->OpenImageFile((char*)dialog.get_filename().c_str()))
-            {
-                if (!ihand->IsPalettePerfect()) ihand->DitherImage();
-                else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
-                mwin->SetNewImageThumbnail(ihand);
-            }
-            break;
-        case(Gtk::RESPONSE_CANCEL):
-            break;
+        ihand->CloseImageFile();
+        if (!ihand->OpenImageFile(fileName.toUtf8().constData()))
+        {
+            if (!ihand->IsPalettePerfect()) ihand->DitherImage();
+            else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+            SetNewImageThumbnail();
+            if (colPickOpen) colPickWin->UpdateAfterOpenFile();
+        }
     }
 }
 
 void GPITool::OnMenuFileExport()
 {
-    Gtk::FileChooserDialog dialog = Gtk::FileChooserDialog("Export To", Gtk::FILE_CHOOSER_ACTION_SAVE);
-    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
-    dialog.add_button("_Export", Gtk::RESPONSE_OK);
+    QString fileName = QFileDialog::getSaveFileName(this, "Export To", nullptr, "GPI files (*.gpi *.GPI)");
 
-    auto typeFilter = Gtk::FileFilter::create();
-    typeFilter->set_name("GPI files");
-    typeFilter->add_pattern("*.gpi");
-    typeFilter->add_pattern("*.GPI");
-    dialog.add_filter(typeFilter);
-
-    int result = dialog.run();
-
-    switch (result)
+    if (!fileName.isNull())
     {
-        case(Gtk::RESPONSE_OK):
-            puts("saving");
-            icomp->CompressAndSaveImage((char*)dialog.get_filename().c_str());
-            break;
-        case(Gtk::RESPONSE_CANCEL):
-            break;
+        icomp->CompressAndSaveImage(fileName.toUtf8().constData());
     }
 }
 
 void GPITool::OnMenuFileQuit()
 {
-    quit();
-    std::vector<Gtk::Window*> wins = get_windows();
-    for (int i = 0; i < wins.size(); i++)
-    {
-        wins[i]->hide();
-    }
+    close();
 }
 
 void GPITool::OnMenuEditPalette()
 {
-    colPickWin = new ColourPickerWindow(ihand, mwin);
-    add_window(*colPickWin);
-    colPickWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&colPickWin)));
-    colPickWin->show_all();
+    if (!colPickOpen)
+    {
+        colPickWin = new ColourPickerWindow(ihand, this);
+        colPickWin->show();
+        connect(colPickWin, &QDockWidget::visibilityChanged, this, &GPITool::OnPaletteClose);
+        colPickOpen = true;
+    }
+
+}
+
+void GPITool::OnPaletteClose()
+{
+    colPickOpen = colPickWin->isVisible();
 }
 
 void GPITool::OnMenuEditDither()
 {
-    dithWin = new DitherWindow(ihand, mwin);
-    add_window(*dithWin);
-    dithWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&dithWin)));
-    dithWin->show_all();
+    if (!dithOpen)
+    {
+        dithWin = new DitherWindow(ihand, this);
+        dithWin->show();
+        connect(dithWin, &QDockWidget::visibilityChanged, this, &GPITool::OnDitherClose);
+        dithOpen = true;
+    }
+}
+
+void GPITool::OnDitherClose()
+{
+    dithOpen = dithWin->isVisible();
 }
 
 void GPITool::OnMenuEditTiling()
 {
-    tileWin = new TilingWindow(ihand, mwin);
-    add_window(*tileWin);
-    tileWin->signal_hide().connect(sigc::bind<Gtk::Window**>(sigc::mem_fun(*this, &GPITool::OnHideWindow), (Gtk::Window**)(&tileWin)));
-    tileWin->show_all();
+    if (!tileOpen)
+    {
+        tileWin = new TilingWindow(ihand, this);
+        tileWin->show();
+        connect(tileWin, &QDockWidget::visibilityChanged, this, &GPITool::OnTilingClose);
+        tileOpen = true;
+    }
 }
 
+void GPITool::OnTilingClose()
+{
+    tileOpen = tileWin->isVisible();
+}
 
 void GPITool::OnMenuHelpAbout()
 {
-    aboutDialog.show();
-    aboutDialog.present();
+    QMessageBox aboutDialog;
+    aboutDialog.setText("GPITool v0.5.0");
+    aboutDialog.setInformativeText("Converts images into .GPI format.\nCopyright (C) Maxim Hoxha 2024\nhttps://maxotaku11niku.github.io/");
+    aboutDialog.setDetailedText(licenseString);
+    aboutDialog.setStandardButtons(QMessageBox::Ok);
+    aboutDialog.setDefaultButton(QMessageBox::Ok);
+    aboutDialog.exec();
 }
 
-void GPITool::OnAboutDialogResponse(int responseID)
+void GPITool::SetNewImageThumbnail()
 {
-    switch (responseID)
+    ImageInfo* iinf = ihand->GetEncodedImage();
+    QImage imagePixels = QImage((uchar*)iinf->data, iinf->width, iinf->height, QImage::Format_RGBA8888);
+    QPixmap imagePixmap = QPixmap::fromImage(imagePixels);
+    image->setPixmap(imagePixmap);
+    sceneView->setSceneRect(0.0, 0.0, iinf->width, iinf->height);
+}
+
+void GPITool::UpdateImageThumbnail()
+{
+    ImageInfo* iinf = ihand->GetEncodedImage();
+    QImage imagePixels = QImage((uchar*)iinf->data, iinf->width, iinf->height, QImage::Format_RGBA8888);
+    QPixmap imagePixmap = QPixmap::fromImage(imagePixels);
+    image->setPixmap(imagePixmap);
+}
+
+void GPITool::UpdateImageThumbnailAfterDither()
+{
+    if(!ihand->IsPalettePerfect()) ihand->DitherImage();
+    else ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+    UpdateImageThumbnail();
+}
+
+void GPITool::UpdateImageThumbnailAfterFindColours()
+{
+    if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
     {
-        case Gtk::RESPONSE_CLOSE:
-        case Gtk::RESPONSE_CANCEL:
-        case Gtk::RESPONSE_DELETE_EVENT:
-            aboutDialog.hide();
-            break;
+        ihand->DitherImage();
     }
+    else
+    {
+        ihand->DitherImage(NODITHER, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, false);
+    }
+    ihand->ShufflePaletteBasedOnOccurrence();
+    UpdateImageThumbnail();
 }
 
 int main(int argc, char* argv[])
 {
     omp_set_num_threads(omp_get_max_threads());
-    Glib::RefPtr<GPITool> gpitool = GPITool::create();
-    return gpitool->run(argc, argv);
+
+    //TODO: put console interface redirect here (avoid Qt related stuff unless we need the GUI)
+
+    QApplication app = QApplication(argc, argv);
+    GPITool gpitool;
+    gpitool.show();
+    return app.exec();
 }
