@@ -57,6 +57,7 @@ private slots:
     void OnMenuEditDither();
     void OnMenuEditTiling();
     void OnMenuHelpAbout();
+    void OnMenuHelpAboutQt();
     void OnPaletteClose();
     void OnDitherClose();
     void OnTilingClose();

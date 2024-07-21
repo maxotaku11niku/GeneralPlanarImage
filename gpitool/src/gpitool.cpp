@@ -156,7 +156,7 @@ static const char* licenseString =
 "ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n"
 "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
 "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n"
-"gtkmm 3.0:\n\n"
+"Qt 5:\n\n"
 "                   GNU LESSER GENERAL PUBLIC LICENSE\n"
 "                       Version 3, 29 June 2007\n\n"
 " Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>\n"
@@ -309,6 +309,7 @@ GPITool::GPITool(QWidget *parent) : QMainWindow()
     menubar->addMenu(editMenu);
     QMenu* helpMenu = new QMenu("&Help");
     helpMenu->addAction("&About...", this, &GPITool::OnMenuHelpAbout);
+    helpMenu->addAction("About &Qt...", this, &GPITool::OnMenuHelpAboutQt);
     menubar->addMenu(helpMenu);
     setMenuBar(menubar);
 
@@ -409,12 +410,19 @@ void GPITool::OnMenuHelpAbout()
 {
     QMessageBox aboutDialog;
     aboutDialog.setText("GPITool v0.5.0");
-    aboutDialog.setInformativeText("Converts images into .GPI format.\nCopyright (C) Maxim Hoxha 2024\nhttps://maxotaku11niku.github.io/");
+    aboutDialog.setInformativeText("Converts images into .GPI format.\nCopyright (C) Maxim Hoxha 2024\nhttps://maxotaku11niku.github.io/\n\nClick 'Show Details...' to see license information.");
     aboutDialog.setDetailedText(licenseString);
+    aboutDialog.setIcon(QMessageBox::Information);
     aboutDialog.setStandardButtons(QMessageBox::Ok);
     aboutDialog.setDefaultButton(QMessageBox::Ok);
     aboutDialog.exec();
 }
+
+void GPITool::OnMenuHelpAboutQt()
+{
+    QMessageBox::aboutQt(this, "About Qt 5");
+}
+
 
 void GPITool::SetNewImageThumbnail()
 {
