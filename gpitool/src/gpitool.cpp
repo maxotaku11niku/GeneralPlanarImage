@@ -450,7 +450,7 @@ void GPITool::UpdateImageThumbnailAfterDither()
 
 void GPITool::UpdateImageThumbnailAfterFindColours()
 {
-    if (!ihand->GetBestPalette(1.0, 0.0, 0.0))
+    if (!ihand->GetBestPalette())
     {
         ihand->DitherImage();
     }

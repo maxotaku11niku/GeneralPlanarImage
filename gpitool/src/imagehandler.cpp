@@ -244,6 +244,10 @@ ImageHandler::ImageHandler()
     postContrast = 0.0;
     boustrophedon = false;
 
+    adaptivePreBrightness = 0.0;
+    adaptivePreContrast = 0.0;
+    adaptiveChromaBias = 1.0;
+
     isTiled = false;
     tileSizeX = 16;
     tileSizeY = 16;
@@ -654,6 +658,12 @@ bool ImageHandler::SavePaletteFile(const char* outFileName)
 
     return true;
 }
+
+bool ImageHandler::GetBestPalette()
+{
+    return GetBestPalette(adaptiveChromaBias, adaptivePreBrightness, adaptivePreContrast);
+}
+
 
 typedef struct
 {
@@ -1354,7 +1364,7 @@ void ImageHandler::DitherImage(int ditherMethod, double ditAmtL, double ditAmtS,
             }
         }
         rowptr = &expandedInput[(lastLine + EDD_EXPAND_Y_TOP) * ew];
-        for (long long i = lastLine + EDD_EXPAND_Y_TOP; i < eh; i++)
+        for (long long i = lastLine + EDD_EXPAND_Y_TOP + 1; i < eh; i++)
         {
             for (long long j = 0; j < ew; j++)
             {

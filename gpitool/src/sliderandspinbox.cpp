@@ -110,6 +110,12 @@ void SliderAndDoubleSpinBox::SetSingleStep(double step)
     spinBox->setSingleStep(step);
 }
 
+void SliderAndDoubleSpinBox::SetDecimals(int prec)
+{
+    spinBox->setDecimals(prec);
+}
+
+
 void SliderAndDoubleSpinBox::SetValue(double val)
 {
     spinBox->setValue(val);

@@ -284,6 +284,7 @@ public:
     int OpenImageFile(const char* inFileName);
     void CloseImageFile();
     bool IsPalettePerfect();
+    bool GetBestPalette();
     bool GetBestPalette(float uvbias, float bright, float contrast);
     bool LoadPaletteFile(const char* inFileName);
     bool SavePaletteFile(const char* outFileName);
@@ -354,6 +355,10 @@ public:
     double postBrightness;
     double postContrast;
     bool boustrophedon;
+
+    double adaptivePreBrightness;
+    double adaptivePreContrast;
+    double adaptiveChromaBias;
 
     bool isTiled;
     int tileSizeX;

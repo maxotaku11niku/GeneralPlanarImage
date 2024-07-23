@@ -63,6 +63,7 @@ public:
     void SetMaximum(double max);
     void SetRange(double min, double max);
     void SetSingleStep(double step);
+    void SetDecimals(int prec);
     void SetValue(double val);
 
 protected slots:

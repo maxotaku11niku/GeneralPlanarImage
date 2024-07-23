@@ -51,16 +51,23 @@ protected:
     SliderAndSpinBox* transThresholdControl;
     QGridLayout* colourGrid;
     QPushButton* colourButtons[256];
+    SliderAndDoubleSpinBox* adaptivePreBrightControl;
+    SliderAndDoubleSpinBox* adaptivePreContrastControl;
+    SliderAndDoubleSpinBox* adaptiveChromaBiasControl;
     QPushButton* findBestPaletteButton;
     QPushButton* loadPaletteButton;
     QPushButton* savePaletteButton;
 
+protected slots:
     void ReorganisePaletteGrid(int numColourPlanes);
     void SetPaletteGridColours();
     void OnTogglePlane(int state);
     void OnToggleBitDepth(bool checked);
     void OnSetTransparencyThreshold(int val);
     void OnSetColour();
+    void OnSetAdaptivePreBrightness(double val);
+    void OnSetAdaptivePreContrast(double val);
+    void OnSetAdaptiveChromaBias(double val);
     void OnRequestBestPalette();
     void OnLoadPaletteFromFile();
     void OnSavePaletteToFile();

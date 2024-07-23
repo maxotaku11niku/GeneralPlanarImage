@@ -64,6 +64,12 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, GPITool* parent) :
         colourButtons[i]->setMinimumSize(32, 20);
         colourGrid->addWidget(colourButtons[i], i/16, i % 16);
     }
+    QLabel* adaptivePreBrightLabel = new QLabel("Adapative Pre-brightness:");
+    adaptivePreBrightControl = new SliderAndDoubleSpinBox();
+    QLabel* adaptivePreContrastLabel = new QLabel("Adapative Pre-contrast:");
+    adaptivePreContrastControl = new SliderAndDoubleSpinBox();
+    QLabel* adaptiveChromaBiasLabel = new QLabel("Adapative Chroma Bias:");
+    adaptiveChromaBiasControl = new SliderAndDoubleSpinBox();
     findBestPaletteButton = new QPushButton("&Find best palette...");
     loadPaletteButton = new QPushButton("&Load palette from file...");
     savePaletteButton = new QPushButton("&Save palette to file...");
@@ -87,6 +93,12 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, GPITool* parent) :
     mainLayout->addWidget(transThresholdControl);
     mainLayout->addWidget(colourGridLabel);
     mainLayout->addLayout(colourGrid);
+    mainLayout->addWidget(adaptivePreBrightLabel);
+    mainLayout->addWidget(adaptivePreBrightControl);
+    mainLayout->addWidget(adaptivePreContrastLabel);
+    mainLayout->addWidget(adaptivePreContrastControl);
+    mainLayout->addWidget(adaptiveChromaBiasLabel);
+    mainLayout->addWidget(adaptiveChromaBiasControl);
     mainLayout->addWidget(findBestPaletteButton);
     mainLayout->addWidget(loadPaletteButton);
     mainLayout->addWidget(savePaletteButton);
@@ -108,6 +120,19 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, GPITool* parent) :
     bpc8Radio->setChecked(ihand->is8BitColour);
     transThresholdControl->SetRange(0, 255);
     transThresholdControl->SetValue(ihand->transparencyThreshold);
+    colourGrid->setSpacing(2);
+    adaptivePreBrightControl->SetRange(-1.0, 1.0);
+    adaptivePreBrightControl->SetSingleStep(0.001);
+    adaptivePreBrightControl->SetDecimals(3);
+    adaptivePreBrightControl->SetValue(ihand->adaptivePreBrightness);
+    adaptivePreContrastControl->SetRange(-1.0, 1.0);
+    adaptivePreContrastControl->SetSingleStep(0.001);
+    adaptivePreContrastControl->SetDecimals(3);
+    adaptivePreContrastControl->SetValue(ihand->adaptivePreContrast);
+    adaptiveChromaBiasControl->SetRange(0.5, 4.0);
+    adaptiveChromaBiasControl->SetSingleStep(0.001);
+    adaptiveChromaBiasControl->SetDecimals(3);
+    adaptiveChromaBiasControl->SetValue(ihand->adaptiveChromaBias);
 
     for (int i = 0; i < 9; i++)
     {
@@ -116,6 +141,9 @@ ColourPickerWindow::ColourPickerWindow(ImageHandler* handler, GPITool* parent) :
     connect(bpc4Radio, &QRadioButton::toggled, this, &ColourPickerWindow::OnToggleBitDepth);
     connect(bpc8Radio, &QRadioButton::toggled, this, &ColourPickerWindow::OnToggleBitDepth);
     connect(transThresholdControl, &SliderAndSpinBox::ValueChanged, this, &ColourPickerWindow::OnSetTransparencyThreshold);
+    connect(adaptivePreBrightControl, &SliderAndDoubleSpinBox::ValueChanged, this, &ColourPickerWindow::OnSetAdaptivePreBrightness);
+    connect(adaptivePreContrastControl, &SliderAndDoubleSpinBox::ValueChanged, this, &ColourPickerWindow::OnSetAdaptivePreContrast);
+    connect(adaptiveChromaBiasControl, &SliderAndDoubleSpinBox::ValueChanged, this, &ColourPickerWindow::OnSetAdaptiveChromaBias);
     connect(findBestPaletteButton, &QPushButton::clicked, this, &ColourPickerWindow::OnRequestBestPalette);
     connect(loadPaletteButton, &QPushButton::clicked, this, &ColourPickerWindow::OnLoadPaletteFromFile);
     connect(savePaletteButton, &QPushButton::clicked, this, &ColourPickerWindow::OnSavePaletteToFile);
@@ -319,6 +347,20 @@ void ColourPickerWindow::OnSetTransparencyThreshold(int val)
     mwin->UpdateImageThumbnailAfterDither();
 }
 
+void ColourPickerWindow::OnSetAdaptivePreBrightness(double val)
+{
+    ihand->adaptivePreBrightness = val;
+}
+
+void ColourPickerWindow::OnSetAdaptivePreContrast(double val)
+{
+    ihand->adaptivePreContrast = val;
+}
+
+void ColourPickerWindow::OnSetAdaptiveChromaBias(double val)
+{
+    ihand->adaptiveChromaBias = val;
+}
 
 void ColourPickerWindow::OnRequestBestPalette()
 {
